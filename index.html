@@ -2090,6 +2090,36 @@ const translations = {
     clBadgeNotSynced: 'Non synchronisé',
     clReadonlyBanner: 'Lecture seule — tes modifications ne seront pas enregistrées',
     clDeleteDenied: 'Action refusée : seul le propriétaire de l\'équipe peut faire cela.',
+    clApiBtn: 'Accès API (Claude)…',
+    clApiTitle: 'Accès API (Claude)',
+    clApiIntro: 'Un jeton permet à Claude de lire et de remplir tes projets directement, avec tes droits (tes projets perso et ceux de tes équipes). Les changements apparaissent en direct ici. Tu peux révoquer un jeton à tout moment.',
+    clApiNone: 'Aucun jeton pour le moment.',
+    clApiName: 'Nom du jeton (ex. Claude)',
+    clApiScope: 'Droits',
+    clApiScopeRead: 'Lecture seule',
+    clApiScopeWrite: 'Lecture et modification',
+    clApiExpiry: 'Expiration',
+    clApiNever: 'Jamais',
+    clApi30: '30 jours',
+    clApi90: '90 jours',
+    clApi365: '1 an',
+    clApiCreate: 'Créer le jeton',
+    clApiRevoke: 'Révoquer',
+    clApiRevokeConfirm: 'Révoquer ce jeton ? Tout connecteur qui l\'utilise cessera de fonctionner.',
+    clApiShowOnce: 'Copie-le maintenant : il ne sera plus jamais affiché. Quiconque le possède agit avec tes droits.',
+    clApiUrlLabel: 'Adresse du connecteur (jeton inclus)',
+    clApiTokenLabel: 'Jeton seul (pour un en-tête Authorization: Bearer)',
+    clApiActive: 'actif',
+    clApiRevokedLabel: 'révoqué',
+    clApiExpiredLabel: 'expiré',
+    clApiUsed: 'utilisé le',
+    clApiNeverUsed: 'jamais utilisé',
+    clApiExpiresOn: 'expire le',
+    clApiNeedName: 'Donne un nom au jeton.',
+    clApiErrTooMany: 'Trop de jetons actifs (10 maximum). Révoque-en un d\'abord.',
+    clLiveUpdated: 'Projet mis à jour à distance',
+    clLiveBusy: 'Ce projet a été modifié ailleurs. Tes modifications non enregistrées sont conservées ; à l\'enregistrement, tu pourras choisir quelle version garder.',
+    clLiveGone: 'Ce projet a été supprimé ou n\'est plus accessible.',
     clConflictTitle: 'Projet modifié par quelqu\'un d\'autre',
     clConflictMsg: 'Une version plus récente de ce projet existe dans le cloud. Que veux-tu faire ?',
     clConflictOverwrite: 'Écraser avec ma version',
@@ -2512,6 +2542,36 @@ const translations = {
     clBadgeNotSynced: 'Not synced',
     clReadonlyBanner: 'Read-only — your changes will not be saved',
     clDeleteDenied: 'Action refused: only the team owner can do this.',
+    clApiBtn: 'API access (Claude)…',
+    clApiTitle: 'API access (Claude)',
+    clApiIntro: 'A token lets Claude read and fill your projects directly, with your own rights (your personal projects and your teams\' ones). Changes show up live here. You can revoke a token at any time.',
+    clApiNone: 'No token yet.',
+    clApiName: 'Token name (e.g. Claude)',
+    clApiScope: 'Rights',
+    clApiScopeRead: 'Read-only',
+    clApiScopeWrite: 'Read and edit',
+    clApiExpiry: 'Expiry',
+    clApiNever: 'Never',
+    clApi30: '30 days',
+    clApi90: '90 days',
+    clApi365: '1 year',
+    clApiCreate: 'Create token',
+    clApiRevoke: 'Revoke',
+    clApiRevokeConfirm: 'Revoke this token? Any connector using it will stop working.',
+    clApiShowOnce: 'Copy it now: it will never be shown again. Anyone who has it acts with your rights.',
+    clApiUrlLabel: 'Connector address (token included)',
+    clApiTokenLabel: 'Token only (for an Authorization: Bearer header)',
+    clApiActive: 'active',
+    clApiRevokedLabel: 'revoked',
+    clApiExpiredLabel: 'expired',
+    clApiUsed: 'used on',
+    clApiNeverUsed: 'never used',
+    clApiExpiresOn: 'expires on',
+    clApiNeedName: 'Give the token a name.',
+    clApiErrTooMany: 'Too many active tokens (10 max). Revoke one first.',
+    clLiveUpdated: 'Project updated remotely',
+    clLiveBusy: 'This project was changed elsewhere. Your unsaved changes are kept; when you save, you will be able to choose which version to keep.',
+    clLiveGone: 'This project was deleted or is no longer accessible.',
     clConflictTitle: 'Project changed by someone else',
     clConflictMsg: 'A newer version of this project exists in the cloud. What do you want to do?',
     clConflictOverwrite: 'Overwrite with my version',
@@ -6011,6 +6071,7 @@ function cloudErrorMessage(err){
   if (m.includes('already registered') || m.includes('already been registered')) return t('clAuthErrExists');
   if (m.includes('password should be at least') || m.includes('weak password')) return t('clAuthErrWeakPwd');
   if (m.includes('invalid_code')) return t('clTeamErrInvalidCode');
+  if (m.includes('too_many_tokens')) return t('clApiErrTooMany');
   if (m.includes('recipient_cannot_edit') || m.includes('not_a_member')) return t('clTransferErrRecipient');
   if (m.includes('failed to fetch') || m.includes('networkerror') || m.includes('network request failed') || m.includes('load failed')) return t('clErrNetwork');
   return raw;
@@ -6245,6 +6306,10 @@ function initCloud(){
   });
   window.addEventListener('online', () => { if (cloudUser) cloudPullAll().then(refreshListIfVisible); });
   window.addEventListener('offline', () => { if (cloudUser) setSyncState('offline'); });
+  // safety net if the realtime connection silently dropped while the tab was hidden
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && cloudUser && Date.now() - cloudLastPullAt > 10000) cloudScheduleRemoteSync();
+  });
 }
 
 async function handleAuthChange(session, event){
@@ -6253,6 +6318,7 @@ async function handleAuthChange(session, event){
   cloudUser = newUser;
   if (!newUser){
     cloudTeams = [];
+    cloudStopRealtime();
     // privacy: another person may use this browser next, so cloud projects
     // don't stay in the local cache (unsynced ones are kept, hidden).
     purgeCloudProjetsFromLocal(false, null);
@@ -6264,6 +6330,8 @@ async function handleAuthChange(session, event){
   cloudTeams = loadTeamsCache(newUser.id);
   purgeCloudProjetsFromLocal(true, newUser.id); // anything cached for another account goes
   renderAccountButton();
+  cloudStopRealtime();
+  cloudStartRealtime();
   const ok = await cloudPullAll();
   if (ok) await maybeOfferLocalUpload();
   refreshListIfVisible();
@@ -6343,11 +6411,12 @@ async function cloudPullAll(){
     fullRows.forEach(r => {
       const i = list.findIndex(p => p.id === r.id);
       if (i !== -1 && list[i].dirty) return; // local edits win until pushed (conflict dialog if needed)
+      if (i !== -1 && cloudEditorBusy(r.id)){ cloudBusyRemote = { id: r.id, version: r.version }; return; } // unsaved edits in the open editor: never swap the stored copy under them
       const e = projetFromRemoteRow(r);
       if (i === -1) list.push(e); else list[i] = e;
     });
     // cloud projects that disappeared remotely (deleted, or I lost access)
-    list = list.filter(p => !(p.cloud && p.version != null && !p.dirty && !remoteIds.has(p.id)));
+    list = list.filter(p => !(p.cloud && p.version != null && !p.dirty && !remoteIds.has(p.id) && !cloudEditorBusy(p.id)));
     saveWorkspaceProjectsList(list);
 
     list.filter(p => p.cloud && p.dirty).forEach(p => cloudQueuePush(p.id));
@@ -6393,7 +6462,161 @@ function cloudPatchLocalMeta(id, patch){
   if (i === -1) return null;
   Object.assign(list[i], patch);
   saveWorkspaceProjectsList(list);
+  if (id === currentProjectId && patch.version !== undefined) cloudOpenSeenVersion = patch.version; // our own push: the open editor already has this content
   return list[i];
+}
+
+// ---------------------------------------------------------------------------
+// Temps réel (Supabase Realtime) — les changements faits ailleurs (autre
+// appareil, coéquipier, Claude via l'API) arrivent sans recharger la page.
+// Principe : un évènement ne fait que déclencher une resynchronisation légère
+// (cloudPullAll). Si l'éditeur ouvert a des modifs non enregistrées, rien n'est
+// remplacé : le dialogue de conflit habituel s'affichera à l'enregistrement.
+// ---------------------------------------------------------------------------
+let cloudChannel = null;
+let cloudRtTimer = null;
+let cloudRtEverSubscribed = false;
+let cloudRemoteSyncing = false;
+let cloudRemoteSyncAgain = false;
+let cloudLastPullAt = 0;
+let cloudOpenSeenVersion = null;      // version du projet ouvert telle qu'elle est en mémoire
+let cloudBusyNotifiedVersion = null;  // évite de répéter l'avertissement « modifié ailleurs »
+let cloudBusyRemote = null;          // { id, version } : version distante plus récente ignorée car l'éditeur ouvert a des modifs non enregistrées
+
+function cloudViewVisible(id){
+  const el = document.getElementById(id);
+  return !!el && el.style.display !== 'none';
+}
+
+// True when the open editor holds edits that are not saved yet.
+function cloudEditorBusy(id){
+  if (!id || id !== currentProjectId) return false;
+  if (cloudViewVisible('project-view')) return hasUnsavedProjetChanges();
+  if (cloudViewVisible('packs-view')) return hasUnsavedChanges() || hasUnsavedProjetChanges();
+  return false;
+}
+
+function cloudToast(msg){
+  try {
+    const old = document.getElementById('cloud-toast');
+    if (old) old.remove();
+    const el = document.createElement('div');
+    el.id = 'cloud-toast';
+    el.setAttribute('role', 'status');
+    el.textContent = msg;
+    el.style.cssText = 'position:fixed; left:50%; bottom:24px; transform:translateX(-50%); max-width:min(92vw,520px); background:#1f2a37; color:#fff; padding:10px 16px; border-radius:8px; font-size:14px; line-height:1.4; z-index:950; box-shadow:0 6px 20px rgba(0,0,0,0.35);';
+    document.body.appendChild(el);
+    setTimeout(() => { if (el.parentNode) el.remove(); }, 5000);
+  } catch (e){}
+}
+
+function cloudStartRealtime(){
+  if (!sb || !cloudUser || cloudChannel || typeof sb.channel !== 'function') return;
+  try {
+    cloudChannel = sb.channel('mecabench-live-' + cloudUser.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projets' }, cloudScheduleRemoteSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, cloudScheduleRemoteSync)
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED'){
+          if (cloudRtEverSubscribed) cloudScheduleRemoteSync(); // reconnected: catch up on what we missed
+          cloudRtEverSubscribed = true;
+        }
+      });
+  } catch (e){ cloudChannel = null; }
+}
+
+function cloudStopRealtime(){
+  clearTimeout(cloudRtTimer);
+  if (cloudChannel && sb){ try { sb.removeChannel(cloudChannel); } catch (e){} }
+  cloudChannel = null;
+  cloudRtEverSubscribed = false;
+  cloudOpenSeenVersion = null;
+}
+
+function cloudScheduleRemoteSync(){
+  clearTimeout(cloudRtTimer);
+  cloudRtTimer = setTimeout(cloudRemoteSync, 350); // a burst of events = one resync
+}
+
+async function cloudRemoteSync(){
+  if (!sb || !cloudUser) return;
+  if (cloudRemoteSyncing){ cloudRemoteSyncAgain = true; return; }
+  cloudRemoteSyncing = true;
+  try {
+    cloudLastPullAt = Date.now();
+    const ok = await cloudPullAll();
+    if (ok) cloudApplyRemoteToView();
+  } catch (e){
+    /* cloudPullAll already reports its errors */
+  } finally {
+    cloudRemoteSyncing = false;
+    if (cloudRemoteSyncAgain){ cloudRemoteSyncAgain = false; cloudScheduleRemoteSync(); }
+  }
+}
+
+// After a resync: refresh the list, and the open project if nothing local is at risk.
+function cloudApplyRemoteToView(){
+  refreshListIfVisible();
+  if (!cloudViewVisible('project-view') && !cloudViewVisible('packs-view')) return;
+  const id = currentProjectId;
+  if (!id || cloudOpenSeenVersion == null) return; // not a synced project (or brand new, never saved)
+  const proj = getWorkspaceProjects().find(p => p.id === id);
+  if (!proj){
+    if (!cloudEditorBusy(id)){ cloudOpenSeenVersion = null; cloudToast(t('clLiveGone')); showList(); }
+    return;
+  }
+  if (cloudBusyRemote && cloudBusyRemote.id === id){
+    if (cloudEditorBusy(id)){
+      if (cloudBusyNotifiedVersion !== cloudBusyRemote.version){ cloudBusyNotifiedVersion = cloudBusyRemote.version; cloudToast(t('clLiveBusy')); }
+      return;
+    }
+    cloudBusyRemote = null;        // edits were saved or discarded meanwhile: fetch the newer copy now
+    cloudScheduleRemoteSync();
+    return;
+  }
+  if (!proj.cloud || proj.version == null || proj.version === cloudOpenSeenVersion) return;
+  if (cloudEditorBusy(id)) return;
+  cloudOpenSeenVersion = proj.version;
+  cloudReloadOpenProjet(proj);
+  cloudToast(t('clLiveUpdated'));
+}
+
+// Reloads the open project's contents into memory and redraws the current
+// screen WITHOUT leaving it (same tab, same Produit).
+function cloudReloadOpenProjet(proj){
+  currentProjetType = proj.type || 'perso';
+  currentProjetTeamId = proj.cloud ? (proj.teamId || null) : null;
+  db = (proj.db || []).map(d => ({ id: d.id, nom: d.nom, reference: d.reference, prix: d.prix, tempPrice: d.tempPrice || null, pm: d.pm || null, va: d.va || null, matiere: d.matiere || null, categorie: d.categorie || null, groupId: d.groupId || null, brutId: d.brutId || null, brutIgnored: d.brutIgnored || false }));
+  dbGroups = (proj.dbGroups || []).map(g => ({ id: g.id, name: g.name, collapsed: g.collapsed || false, parentId: g.parentId || null }));
+  bruts = (proj.bruts || []).map(b => ({ id: b.id, nom: b.nom, reference: b.reference, prix: b.prix, tempPrice: b.tempPrice || null, pm: b.pm || null, va: b.va || null, matiere: b.matiere || null, categorie: b.categorie || null, collapsed: b.collapsed || false }));
+  currentProjetProduits = (proj.produits || []).map(p => ({ id: p.id, title: p.title || '', rows: (p.rows || []).map(r => ({ ...r })), notes: p.notes || '', updatedAt: p.updatedAt || 0 }));
+  document.getElementById('projet-title-input').value = proj.title || '';
+
+  if (cloudViewVisible('packs-view')){
+    if (currentProduitId){
+      const produit = currentProjetProduits.find(p => p.id === currentProduitId);
+      if (!produit){ openProjectView(proj.id); return; } // this Produit no longer exists: back to the project
+      undoStack = [];
+      redoStack = [];
+      selectedPackRow = null;
+      rows = (produit.rows || []).map(r => ({ id: r.id, nombre: r.nombre, reference: r.reference, nom: r.nom, parent: r.parent, dbId: r.dbId || null, packRefId: r.packRefId || null, special: r.special || null, isSachet: r.isSachet || null, va: r.va || null, previewColor: r.previewColor || null }));
+      currentNotes = produit.notes || '';
+      document.getElementById('project-title').value = produit.title || '';
+      renumberIds();
+      renderRows();
+      update();
+      lastSavedSnapshot = getCurrentSnapshot();
+    }
+    renderDbTable();
+    renderPackList();
+    renderPackDetail();
+  } else {
+    renderDbTable();
+    renderProduitTiles();
+  }
+  lastSavedProjetSnapshot = getCurrentProjetSnapshot();
+  refreshReadOnlyState();
+  updateReadonlyUi();
 }
 
 async function cloudPushNow(id){
@@ -6727,6 +6950,7 @@ function openAccountModal(){
     status.textContent = syncStateLabel() + (cloudLastError ? ' — ' + cloudLastError : '');
     refreshListIfVisible();
   } }));
+  row.appendChild(modalButton(t('clApiBtn'), { onClick: () => { m.close(); openApiTokensModal(); } }));
   row.appendChild(modalButton(t('clLogoutBtn'), { danger: true, onClick: async () => {
     const dirty = getWorkspaceProjects().filter(p => p.cloud && p.dirty).length;
     if (dirty){
@@ -6902,6 +7126,129 @@ async function openTeamManager(team){
     }
     row.appendChild(left);
     row.appendChild(modalButton(t('clClose'), { onClick: () => m.close() }));
+    body.appendChild(row);
+  };
+
+  body.appendChild(modalMessage('…'));
+  try { await render(); } catch (e){ body.innerHTML = ''; body.appendChild(modalMessage(cloudErrorMessage(e), 'var(--error-color)')); }
+}
+
+// ---------------------------------------------------------------------------
+// Accès API : jetons personnels pour le connecteur Claude
+// ---------------------------------------------------------------------------
+function apiConnectorBaseUrl(){
+  return String(SUPABASE_URL || '').replace(/\/+$/, '') + '/functions/v1/mecabench-mcp';
+}
+
+async function openApiTokensModal(){
+  if (!sb || !cloudUser) return;
+  const m = createModal(t('clApiTitle'), { width: 620 });
+  const body = document.createElement('div');
+  m.panel.appendChild(body);
+  let justCreated = null;
+  const fmtDate = d => new Date(d).toLocaleDateString();
+
+  const copyRow = (parent, label, value) => {
+    const f = modalField(label, 'text', { value, readOnly: true });
+    f.input.style.fontFamily = 'monospace';
+    f.input.style.fontSize = '12px';
+    f.input.addEventListener('focus', () => f.input.select());
+    const r = document.createElement('div');
+    r.className = 'row-actions';
+    r.style.cssText = 'margin:-6px 0 14px;';
+    const copy = modalButton(t('clCopy'), { onClick: async () => {
+      try { await navigator.clipboard.writeText(value); copy.textContent = t('clCopied'); setTimeout(() => { copy.textContent = t('clCopy'); }, 1200); }
+      catch (e){ f.input.select(); }
+    } });
+    r.appendChild(copy);
+    parent.appendChild(f.wrap);
+    parent.appendChild(r);
+  };
+
+  const render = async () => {
+    body.innerHTML = '';
+    body.appendChild(modalMessage(t('clApiIntro'), 'var(--muted)'));
+
+    if (justCreated){
+      const box = document.createElement('div');
+      box.style.cssText = 'border:1px solid var(--line); border-radius:8px; padding:12px 12px 0; margin:12px 0;';
+      const warn = modalMessage(t('clApiShowOnce'));
+      warn.style.fontWeight = '600';
+      box.appendChild(warn);
+      copyRow(box, t('clApiUrlLabel'), apiConnectorBaseUrl() + '/' + justCreated);
+      copyRow(box, t('clApiTokenLabel'), justCreated);
+      body.appendChild(box);
+    }
+
+    const res = await sb.from('api_tokens').select('id, name, prefix, scope, created_at, last_used_at, expires_at, revoked_at').order('created_at', { ascending: false });
+    if (res.error) throw res.error;
+    const tokens = res.data || [];
+    if (!tokens.length) body.appendChild(modalMessage(t('clApiNone'), 'var(--muted)'));
+    const now = Date.now();
+    tokens.forEach(tk => {
+      const revoked = !!tk.revoked_at;
+      const expired = !revoked && tk.expires_at && Date.parse(tk.expires_at) < now;
+      const active = !revoked && !expired;
+      const line = document.createElement('div');
+      line.style.cssText = 'display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); font-size:13px;' + (active ? '' : 'opacity:0.55;');
+      const info = document.createElement('div');
+      info.style.cssText = 'flex:1; min-width:0;';
+      const title = document.createElement('div');
+      title.style.fontWeight = '600';
+      title.textContent = tk.name + '  (' + tk.prefix + '…)  ·  ' + t(tk.scope === 'read' ? 'clApiScopeRead' : 'clApiScopeWrite');
+      const meta = document.createElement('div');
+      meta.style.cssText = 'color:var(--muted); font-size:12px;';
+      const parts = [revoked ? t('clApiRevokedLabel') : (expired ? t('clApiExpiredLabel') : t('clApiActive'))];
+      parts.push(tk.last_used_at ? t('clApiUsed') + ' ' + fmtDate(tk.last_used_at) : t('clApiNeverUsed'));
+      if (tk.expires_at && active) parts.push(t('clApiExpiresOn') + ' ' + fmtDate(tk.expires_at));
+      meta.textContent = parts.join(' · ');
+      info.appendChild(title);
+      info.appendChild(meta);
+      line.appendChild(info);
+      if (active){
+        line.appendChild(modalButton(t('clApiRevoke'), { danger: true, onClick: async () => {
+          const ok = await showConfirmModal(t('clApiRevokeConfirm'));
+          if (!ok) return;
+          const r = await sb.rpc('revoke_api_token', { p_id: tk.id });
+          if (r.error){ alert(cloudErrorMessage(r.error)); return; }
+          render().catch(() => {});
+        } }));
+      }
+      body.appendChild(line);
+    });
+
+    // creation form
+    const h = document.createElement('h2');
+    h.textContent = t('clApiCreate');
+    h.style.marginTop = '20px';
+    body.appendChild(h);
+    const nameF = modalField(t('clApiName'), 'text', { placeholder: 'Claude' });
+    body.appendChild(nameF.wrap);
+    const mkSelect = (label, options) => {
+      const wrap = document.createElement('label');
+      wrap.style.cssText = 'display:block; font-size:13px; margin-bottom:12px;';
+      wrap.appendChild(document.createTextNode(label));
+      const sel = document.createElement('select');
+      sel.style.cssText = 'width:100%; margin-top:6px; box-sizing:border-box;';
+      options.forEach(([v, key]) => { const o = document.createElement('option'); o.value = v; o.textContent = t(key); sel.appendChild(o); });
+      wrap.appendChild(sel);
+      body.appendChild(wrap);
+      return sel;
+    };
+    const scopeSel = mkSelect(t('clApiScope'), [['write', 'clApiScopeWrite'], ['read', 'clApiScopeRead']]);
+    const expirySel = mkSelect(t('clApiExpiry'), [['', 'clApiNever'], ['30', 'clApi30'], ['90', 'clApi90'], ['365', 'clApi365']]);
+    const msg = modalMessage('', 'var(--error-color)');
+    body.appendChild(msg);
+    const row = modalButtonsRow();
+    row.appendChild(modalButton(t('clClose'), { onClick: () => m.close() }));
+    row.appendChild(modalButton(t('clApiCreate'), { primary: true, onClick: async () => {
+      const name = nameF.input.value.trim();
+      if (!name){ msg.textContent = t('clApiNeedName'); return; }
+      const r = await sb.rpc('create_api_token', { p_name: name, p_scope: scopeSel.value, p_days: expirySel.value ? parseInt(expirySel.value, 10) : null });
+      if (r.error){ msg.textContent = cloudErrorMessage(r.error); return; }
+      justCreated = r.data;
+      render().catch(() => {});
+    } }));
     body.appendChild(row);
   };
 
@@ -7090,6 +7437,10 @@ function openProjectView(projetId){
       bruts = (proj.bruts || []).map(b => ({ id: b.id, nom: b.nom, reference: b.reference, prix: b.prix, tempPrice: b.tempPrice || null, pm: b.pm || null, va: b.va || null, matiere: b.matiere || null, categorie: b.categorie || null, collapsed: b.collapsed || false }));
       currentProjetProduits = (proj.produits || []).map(p => ({ id: p.id, title: p.title || '', rows: (p.rows || []).map(r => ({ ...r })), notes: p.notes || '', updatedAt: p.updatedAt || 0 }));
       document.getElementById('projet-title-input').value = proj.title || '';
+      cloudOpenSeenVersion = (proj.cloud && proj.version != null) ? proj.version : null;
+      cloudBusyRemote = null;
+    } else {
+      cloudOpenSeenVersion = null;
     }
   }
   currentProduitId = null;

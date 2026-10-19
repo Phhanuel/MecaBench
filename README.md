@@ -33,6 +33,19 @@ Avec Supabase, on peut se connecter (e-mail + mot de passe, ou compte Google), r
 
 Les projets existants dans le navigateur ne sont pas perdus : à la première connexion, l'outil propose de les envoyer vers le compte (ou de les garder en local).
 
+## Temps réel et connecteur Claude (optionnel)
+
+**Temps réel** : quand tu es connecté, les changements faits ailleurs (autre appareil, coéquipier, Claude) apparaissent sans recharger la page : la liste se met à jour, et le projet ouvert se recharge tout seul s'il n'a pas de modifications non enregistrées. Si tu as des modifications en cours, rien n'est écrasé : un message le signale et le dialogue de conflit habituel te laisse choisir à l'enregistrement. Il suffit d'avoir relancé `supabase-setup.sql` (section 9 : Realtime).
+
+**Connecteur Claude (API)** : permet à Claude de lire et remplir tes projets directement, avec tes droits.
+
+1. Relancer `supabase-setup.sql` en entier (sections 9 et 10 : jetons et fonctions `api_*`).
+2. Supabase > **Edge Functions** > **Deploy a new function** > *Via Editor* : nom `mecabench-mcp`, coller `supabase/functions/mecabench-mcp/index.ts`, **Deploy**. Puis, dans les réglages de la fonction, désactiver **Verify JWT** (l'authentification se fait avec le jeton MecaBench). En ligne de commande : `supabase functions deploy mecabench-mcp --no-verify-jwt`.
+3. Dans MecaBench : **Mon compte > Accès API (Claude)…** > créer un jeton (portée *Lecture et modification* ou *Lecture seule*). Il n'est affiché qu'une fois.
+4. Dans Claude, ajouter un connecteur personnalisé avec l'adresse fournie : `https://<projet>.supabase.co/functions/v1/mecabench-mcp/<jeton>` (ou la même adresse sans jeton et l'en-tête `Authorization: Bearer <jeton>` si le client le permet).
+
+Outils exposés : `list_projects`, `get_project`, `create_project`, `rename_project`, `add_parts`, `update_part`, `delete_parts`, `save_produit`. Il n'y a volontairement aucun outil de suppression de projet ou de produit. Un jeton se révoque à tout moment (même écran) ; l'adresse contenant le jeton est un secret : ne la partage pas.
+
 ## Mettre en ligne avec GitHub Pages
 
 1. Créer un nouveau repo sur GitHub (public ou privé), par exemple `csv-generator`.
@@ -62,6 +75,8 @@ Les projets existants dans le navigateur ne sont pas perdus : à la première co
 .
 ├── index.html           # l'outil complet (interface + logique de génération du CSV)
 ├── supabase-setup.sql   # tables, règles de sécurité et fonctions à exécuter dans Supabase
+├── supabase/functions/mecabench-mcp/index.ts   # connecteur Claude (fonction Edge)
+├── confidentialite.html
 └── README.md
 ```
 
