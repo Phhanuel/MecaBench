@@ -722,6 +722,7 @@
 
 <div style="position:fixed; top:20px; right:20px; display:flex; gap:8px; align-items:center; z-index:500;">
   <button class="theme-toggle" id="account-btn" type="button" style="position:static; display:none;"></button>
+  <button class="theme-toggle" id="back-prev-btn" type="button" style="position:static; display:none;" data-i18n="backPrevBtn">← Retour</button>
   <button class="theme-toggle" id="exit-produit-btn" type="button" style="position:static; display:none;" data-i18n="exitProduitBtn">← Base de données</button>
   <button class="theme-toggle" id="back-to-home-btn" type="button" style="position:static; display:none;" data-i18n="homeBtn">Accueil</button>
   <div style="display:flex; border:1px solid var(--line); border-radius:20px; overflow:hidden; background:var(--panel); box-shadow:0 2px 6px rgba(0,0,0,0.08);">
@@ -2100,6 +2101,7 @@ const translations = {
     clUploadYes: 'Envoyer',
     clUploadNo: 'Garder en local',
     exitProduitBtn: '← Base de données',
+    backPrevBtn: '← Retour',
     themeDark: 'Sombre',
     dragHandleTitle: 'Glisser pour réordonner',
     deleteRowTitle: 'Supprimer',
@@ -2521,6 +2523,7 @@ const translations = {
     clUploadYes: 'Send',
     clUploadNo: 'Keep local',
     exitProduitBtn: '← Database',
+    backPrevBtn: '← Back',
     themeDark: 'Dark',
     dragHandleTitle: 'Drag to reorder',
     deleteRowTitle: 'Delete',
@@ -7106,6 +7109,7 @@ function openProjectView(projetId){
   document.getElementById('back-to-home-btn').style.display = 'inline-block';
   backTarget = 'list';
   updateReadonlyUi();
+  navRecord({ screen: 'project', projectId: currentProjectId });
 }
 
 // Creates a brand new Produit inside the currently open Projet and opens
@@ -7400,6 +7404,106 @@ function renderNomenclatureList(){
 }
 
 // =============================================================================
+// BROWSER HISTORY
+// The app is a single page, so each screen change is recorded as a history
+// entry (History API, no URL change): the browser's Back/Forward buttons and
+// the "← Retour" button walk through the screens the user visited. Leaving an
+// editor this way goes through the same unsaved-changes check as the other
+// navigation buttons; if the user cancels, the history position is restored.
+// =============================================================================
+const NAV_SID = Math.random().toString(36).slice(2);
+let navIdx = 0;              // position of the current entry in this page's history
+let navCurrent = { screen: 'home' };
+let navRestoring = false;    // true while a popstate is being applied (no new entries)
+let navIgnoreNext = false;   // true while undoing a cancelled navigation
+
+function navSame(a, b){
+  return a && b && a.screen === b.screen && (a.projectId || null) === (b.projectId || null)
+    && (a.produitId || null) === (b.produitId || null) && (a.bacId || null) === (b.bacId || null)
+    && (a.titleKey || null) === (b.titleKey || null);
+}
+
+function updateNavUi(){
+  const btn = document.getElementById('back-prev-btn');
+  if (btn) btn.style.display = navIdx > 0 ? 'inline-block' : 'none';
+}
+
+// Called by every show*/open* function once its screen is displayed.
+function navRecord(info){
+  const base = { nav: true, sid: NAV_SID };
+  try {
+    if (navRestoring || navSame(navCurrent, info)){
+      navCurrent = info;
+      history.replaceState(Object.assign({ idx: navIdx }, info, base), '');
+    } else {
+      navIdx += 1;
+      navCurrent = info;
+      history.pushState(Object.assign({ idx: navIdx }, info, base), '');
+    }
+  } catch (e){ /* History API unavailable: the app still works, just without Back */ }
+  updateNavUi();
+}
+
+function navInit(){
+  try { history.replaceState(Object.assign({ nav: true, sid: NAV_SID, idx: 0 }, navCurrent), ''); } catch (e){}
+  updateNavUi();
+}
+
+// Opens a Projet from a history entry; false if it no longer exists.
+function navOpenProject(projectId){
+  if (!projectId) return false;
+  const exists = getWorkspaceProjects().some(p => p.id === projectId);
+  if (!exists && projectId !== currentProjectId) return false; // lost, or a stale unsaved draft
+  openProjectView(projectId);
+  return true;
+}
+
+function navApply(st){
+  navRestoring = true;
+  try {
+    switch (st.screen){
+      case 'list': showList(); break;
+      case 'bacList': showBacList(); break;
+      case 'placeholder': showPlaceholder(st.titleKey || 'pieuvreTitle'); break;
+      case 'project':
+        if (!navOpenProject(st.projectId)) showList();
+        break;
+      case 'packs':
+        if (!navOpenProject(st.projectId)){ showList(); break; }
+        // a Produit that was never saved cannot be reopened: stay on the database
+        if (st.produitId && currentProjetProduits.some(p => p.id === st.produitId)) openProduit(st.produitId);
+        break;
+      case 'bacApp':
+        if (st.bacId && getSavedBacProjects().some(p => p.id === st.bacId)) loadBacProject(st.bacId);
+        else showBacList();
+        break;
+      default: showHome();
+    }
+  } finally {
+    navRestoring = false;
+  }
+}
+
+async function navOnPopState(e){
+  if (navIgnoreNext){ navIgnoreNext = false; return; }
+  const own = e.state && e.state.nav && e.state.sid === NAV_SID;
+  // entries from a previous page load (or wiped by another script) count as the start
+  const st = own ? e.state : { nav: true, sid: NAV_SID, idx: 0, screen: 'home' };
+  if (!(await resolveUnsavedChangesBeforeLeaving())){
+    const delta = navIdx - st.idx;
+    if (delta !== 0){
+      navIgnoreNext = true;
+      setTimeout(() => { navIgnoreNext = false; }, 600);
+      history.go(delta);
+    }
+    return;
+  }
+  navIdx = st.idx;
+  navCurrent = { screen: st.screen };
+  navApply(st);
+}
+
+// =============================================================================
 // VIEW NAVIGATION
 // Simple show/hide switching between the app's top-level screens (home,
 // list, packs, search, notes, bête à cornes...).
@@ -7422,6 +7526,7 @@ function showHome(){
   hideAllViews();
   document.getElementById('home-view').style.display = 'block';
   document.getElementById('back-to-home-btn').style.display = 'none';
+  navRecord({ screen: 'home' });
 }
 
 function showPlaceholder(titleKey){
@@ -7430,6 +7535,7 @@ function showPlaceholder(titleKey){
   document.getElementById('placeholder-view').style.display = 'block';
   document.getElementById('back-to-home-btn').style.display = 'inline-block';
   backTarget = 'home';
+  navRecord({ screen: 'placeholder', titleKey });
 }
 
 function showList(){
@@ -7437,6 +7543,7 @@ function showList(){
   document.getElementById('list-view').style.display = 'block';
   document.getElementById('back-to-home-btn').style.display = 'inline-block';
   backTarget = 'home';
+  navRecord({ screen: 'list' });
   renderNomenclatureList();
   if (cloudUser) cloudPullAll().then(ok => { if (ok) refreshListIfVisible(); });
 }
@@ -8638,6 +8745,7 @@ function showPacksView(){
   renderPackList();
   renderPackDetail();
   updateReadonlyUi();
+  navRecord({ screen: 'packs', projectId: currentProjectId, produitId: currentProduitId });
 }
 
 // NOTE: there used to be a showApp() function here that navigated to the
@@ -8660,6 +8768,7 @@ function showBacList(){
   document.getElementById('bac-list-view').style.display = 'block';
   document.getElementById('back-to-home-btn').style.display = 'inline-block';
   backTarget = 'home';
+  navRecord({ screen: 'bacList' });
   renderBacList();
 }
 
@@ -8668,6 +8777,7 @@ function showBacApp(){
   document.getElementById('bac-app-view').style.display = 'block';
   document.getElementById('back-to-home-btn').style.display = 'inline-block';
   backTarget = 'bacList';
+  navRecord({ screen: 'bacApp', bacId: bacCurrentProjectId });
 }
 
 // Guided mini-tutorials: each key maps to a short list of steps, each
@@ -9313,6 +9423,8 @@ document.getElementById('go-to-pieuvre-btn').addEventListener('keydown', e => {
   if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); showPlaceholder('pieuvreTitle'); }
 });
 document.getElementById('back-to-home-btn').addEventListener('click', goHome);
+document.getElementById('back-prev-btn').addEventListener('click', () => { if (navIdx > 0) history.back(); });
+window.addEventListener('popstate', navOnPopState);
 document.getElementById('exit-produit-btn').addEventListener('click', exitProduitToDatabase);
 document.getElementById('import-project-file').addEventListener('change', e => {
   const file = e.target.files && e.target.files[0];
@@ -10280,6 +10392,7 @@ window.addEventListener('beforeunload', e => {
 renderRows();
 update();
 applyLanguage('fr');
+navInit();
 initCloud();
 </script>
 
