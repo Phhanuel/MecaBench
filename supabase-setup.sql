@@ -429,3 +429,264 @@ grant execute on function public.create_team(text)               to authenticate
 grant execute on function public.join_team(text)                 to authenticated;
 grant execute on function public.regenerate_team_code(uuid, text) to authenticated;
 grant execute on function public.transfer_projet(uuid, uuid, integer) to authenticated;
+
+-- =============================================================================
+-- 9. Temps réel : les changements de projets/équipes sont poussés aux navigateurs
+--    ouverts (les règles RLS ci-dessus s'appliquent : chacun ne reçoit que ce
+--    qu'il a le droit de lire).
+-- =============================================================================
+do $$
+begin
+  begin
+    alter publication supabase_realtime add table public.projets;
+  exception when duplicate_object or undefined_object then null;
+  end;
+  begin
+    alter publication supabase_realtime add table public.team_members;
+  exception when duplicate_object or undefined_object then null;
+  end;
+end $$;
+
+-- =============================================================================
+-- 10. Accès API (connecteur Claude) : jetons personnels
+--
+--   - Un jeton est créé depuis l'appli (Mon compte > Accès API), affiché UNE
+--     seule fois ; seule son empreinte (sha-256) est stockée.
+--   - Il agit avec les droits de son propriétaire : mes projets perso et ceux de
+--     mes équipes ; en lecture seule dans une équipe où je suis lecteur.
+--   - Portée "read" (consultation) ou "write" (consultation + modification).
+--   - Révocable à tout moment, expiration facultative, 10 jetons actifs max.
+--   - Les fonctions api_* ne sont appelables QUE par la clé de service, c'est-à-dire
+--     par la fonction Edge "mecabench-mcp" (jamais depuis un navigateur).
+-- =============================================================================
+create table if not exists public.api_tokens (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  name         text not null,
+  prefix       text not null,                 -- début du jeton, pour le reconnaître dans la liste
+  token_hash   bytea not null unique,         -- sha-256 du jeton complet
+  scope        text not null default 'write' check (scope in ('read', 'write')),
+  created_at   timestamptz not null default now(),
+  last_used_at timestamptz,
+  expires_at   timestamptz,
+  revoked_at   timestamptz
+);
+create index if not exists api_tokens_user_idx on public.api_tokens (user_id);
+
+alter table public.api_tokens enable row level security;
+drop policy if exists api_tokens_select on public.api_tokens;
+create policy api_tokens_select on public.api_tokens for select to authenticated
+  using (user_id = auth.uid());
+
+-- le navigateur ne lit que les colonnes d'affichage (jamais l'empreinte)
+revoke all on public.api_tokens from anon, authenticated;
+grant select (id, name, prefix, scope, created_at, last_used_at, expires_at, revoked_at)
+  on public.api_tokens to authenticated;
+
+create or replace function public.create_api_token(p_name text, p_scope text default 'write', p_days integer default null)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid   uuid := auth.uid();
+  v_name  text := btrim(coalesce(p_name, ''));
+  v_token text;
+  v_n     integer;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if v_name = '' or length(v_name) > 60 then raise exception 'invalid_name'; end if;
+  if p_scope not in ('read', 'write') then raise exception 'invalid_scope'; end if;
+  if p_days is not null and (p_days < 1 or p_days > 3650) then raise exception 'invalid_expiry'; end if;
+  select count(*) into v_n from public.api_tokens
+    where user_id = v_uid and revoked_at is null
+      and (expires_at is null or expires_at > now());
+  if v_n >= 10 then raise exception 'too_many_tokens'; end if;
+
+  v_token := 'mbk_' || replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '');
+  insert into public.api_tokens (user_id, name, prefix, token_hash, scope, expires_at)
+  values (v_uid, v_name, left(v_token, 8), sha256(convert_to(v_token, 'utf8')), p_scope,
+          case when p_days is null then null else now() + make_interval(days => p_days) end);
+  return v_token;
+end;
+$$;
+
+create or replace function public.revoke_api_token(p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  update public.api_tokens set revoked_at = now()
+    where id = p_id and user_id = auth.uid() and revoked_at is null;
+  if not found then raise exception 'not_found'; end if;
+end;
+$$;
+
+-- ---- fonctions internes de l'API (clé de service uniquement) ----------------
+create or replace function public.api_auth(p_token text, p_need_write boolean default false)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare r public.api_tokens;
+begin
+  select * into r from public.api_tokens
+    where token_hash = sha256(convert_to(coalesce(p_token, ''), 'utf8'));
+  if not found or r.revoked_at is not null or (r.expires_at is not null and r.expires_at < now()) then
+    raise exception 'invalid_token';
+  end if;
+  if p_need_write and r.scope <> 'write' then raise exception 'read_only_token'; end if;
+  if r.last_used_at is null or r.last_used_at < now() - interval '1 minute' then
+    update public.api_tokens set last_used_at = now() where id = r.id;
+  end if;
+  return r.user_id;
+end;
+$$;
+
+-- rôle de p_uid sur un projet : 'owner' (perso), 'owner'/'editor'/'viewer' (équipe) ou null
+create or replace function public.api_role(p_uid uuid, p_team uuid, p_owner uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when p_team is null then (case when p_owner = p_uid then 'owner' end)
+    else (select role from public.team_members where team_id = p_team and user_id = p_uid)
+  end
+$$;
+
+-- vérifie la forme des données d'un projet et complète les listes manquantes
+create or replace function public.api_check_data(p_data jsonb)
+returns jsonb
+language plpgsql
+immutable
+as $$
+declare k text; d jsonb := coalesce(p_data, '{}'::jsonb);
+begin
+  if jsonb_typeof(d) <> 'object' then raise exception 'invalid_data'; end if;
+  foreach k in array array['db', 'dbGroups', 'bruts', 'produits'] loop
+    if d ? k then
+      if jsonb_typeof(d -> k) <> 'array' then raise exception 'invalid_data'; end if;
+    else
+      d := d || jsonb_build_object(k, '[]'::jsonb);
+    end if;
+  end loop;
+  if octet_length(d::text) > 4000000 then raise exception 'data_too_large'; end if;
+  return d;
+end;
+$$;
+
+create or replace function public.api_list_projets(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_uid uuid := public.api_auth(p_token, false);
+begin
+  return coalesce((
+    select jsonb_agg(x order by lower(x ->> 'title'))
+    from (
+      select jsonb_build_object(
+        'id', p.id, 'title', p.title, 'team_id', p.team_id, 'team_name', t.name,
+        'role', public.api_role(v_uid, p.team_id, p.owner_id), 'owner_id', p.owner_id,
+        'version', p.version, 'updated_at', p.updated_at,
+        'parts',    case when jsonb_typeof(p.data -> 'db') = 'array' then jsonb_array_length(p.data -> 'db') else 0 end,
+        'produits', case when jsonb_typeof(p.data -> 'produits') = 'array' then jsonb_array_length(p.data -> 'produits') else 0 end
+      ) as x
+      from public.projets p
+      left join public.teams t on t.id = p.team_id
+      where public.api_role(v_uid, p.team_id, p.owner_id) is not null
+    ) s
+  ), '[]'::jsonb);
+end;
+$$;
+
+create or replace function public.api_get_projet(p_token text, p_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_uid uuid := public.api_auth(p_token, false); p public.projets; v_role text; v_team text;
+begin
+  select * into p from public.projets where id = p_id;
+  v_role := case when found then public.api_role(v_uid, p.team_id, p.owner_id) end;
+  if v_role is null then raise exception 'not_found'; end if;
+  select name into v_team from public.teams where id = p.team_id;
+  return jsonb_build_object(
+    'id', p.id, 'title', p.title, 'team_id', p.team_id, 'team_name', v_team, 'role', v_role,
+    'owner_id', p.owner_id, 'version', p.version, 'updated_at', p.updated_at, 'data', p.data);
+end;
+$$;
+
+create or replace function public.api_create_projet(p_token text, p_title text, p_team uuid, p_data jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_uid uuid := public.api_auth(p_token, true); v_title text := btrim(coalesce(p_title, '')); p public.projets;
+begin
+  if length(v_title) > 200 then raise exception 'invalid_title'; end if;
+  if p_team is not null and coalesce(public.api_role(v_uid, p_team, null), '') not in ('owner', 'editor') then
+    raise exception 'forbidden';
+  end if;
+  insert into public.projets (owner_id, team_id, title, data)
+  values (v_uid, p_team, v_title, public.api_check_data(p_data))
+  returning * into p;
+  return jsonb_build_object('id', p.id, 'version', p.version);
+end;
+$$;
+
+create or replace function public.api_update_projet(p_token text, p_id uuid, p_version integer, p_title text, p_data jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_uid uuid := public.api_auth(p_token, true); p public.projets; v_role text; v_title text := btrim(p_title);
+begin
+  select * into p from public.projets where id = p_id for update;
+  v_role := case when found then public.api_role(v_uid, p.team_id, p.owner_id) end;
+  if v_role is null then raise exception 'not_found'; end if;
+  if v_role not in ('owner', 'editor') then raise exception 'forbidden'; end if;
+  if p.version is distinct from p_version then raise exception 'version_conflict'; end if;
+  if v_title is not null and length(v_title) > 200 then raise exception 'invalid_title'; end if;
+  update public.projets
+     set title = coalesce(v_title, title),
+         data  = case when p_data is null then data else public.api_check_data(p_data) end
+   where id = p_id
+  returning * into p;
+  return jsonb_build_object('id', p.id, 'version', p.version);
+end;
+$$;
+
+-- droits : jetons créés/révoqués par l'utilisateur connecté ; fonctions api_* réservées
+-- à la clé de service (fonction Edge)
+revoke all on function public.create_api_token(text, text, integer) from public, anon;
+revoke all on function public.revoke_api_token(uuid)                from public, anon;
+grant execute on function public.create_api_token(text, text, integer) to authenticated;
+grant execute on function public.revoke_api_token(uuid)                to authenticated;
+
+revoke all on function public.api_auth(text, boolean)                                  from public, anon, authenticated;
+revoke all on function public.api_role(uuid, uuid, uuid)                               from public, anon, authenticated;
+revoke all on function public.api_check_data(jsonb)                                    from public, anon, authenticated;
+revoke all on function public.api_list_projets(text)                                   from public, anon, authenticated;
+revoke all on function public.api_get_projet(text, uuid)                               from public, anon, authenticated;
+revoke all on function public.api_create_projet(text, text, uuid, jsonb)              from public, anon, authenticated;
+revoke all on function public.api_update_projet(text, uuid, integer, text, jsonb)      from public, anon, authenticated;
+grant execute on function public.api_auth(text, boolean)                               to service_role;
+grant execute on function public.api_role(uuid, uuid, uuid)                            to service_role;
+grant execute on function public.api_check_data(jsonb)                                 to service_role;
+grant execute on function public.api_list_projets(text)                                to service_role;
+grant execute on function public.api_get_projet(text, uuid)                            to service_role;
+grant execute on function public.api_create_projet(text, text, uuid, jsonb)           to service_role;
+grant execute on function public.api_update_projet(text, uuid, integer, text, jsonb)  to service_role;
