@@ -162,7 +162,10 @@ returns trigger
 language plpgsql
 as $$
 begin
-  if new.owner_id is distinct from old.owner_id then
+  -- le propriétaire ne change que via transfer_projet(), qui pose ce drapeau
+  -- (valable pour ce seul projet et pour la transaction en cours)
+  if new.owner_id is distinct from old.owner_id
+     and coalesce(current_setting('app.transfer_projet', true), '') <> old.id::text then
     raise exception 'owner_id is immutable';
   end if;
   -- seul le créateur du projet peut le déplacer entre l'espace perso et les équipes
@@ -270,6 +273,60 @@ begin
 end;
 $$;
 
+-- Transfert de propriété d'un projet d'équipe : immédiat (sans acceptation),
+-- le projet reste dans l'équipe, l'ancien propriétaire garde son rôle d'équipe
+-- (éditeur). Réservé au propriétaire actuel, vers un membre éditeur/propriétaire
+-- de la même équipe. p_version : verrou optimiste (null = pas de contrôle).
+create or replace function public.transfer_projet(p_projet uuid, p_to uuid, p_version integer)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_proj    public.projets;
+  v_role    text;
+  v_version integer;
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into v_proj from public.projets where id = p_projet for update;
+  if not found or v_proj.owner_id is distinct from auth.uid() then
+    raise exception 'forbidden';
+  end if;
+  if v_proj.team_id is null then
+    raise exception 'not_a_team_project';
+  end if;
+  if public.team_role(v_proj.team_id) not in ('owner', 'editor') then
+    raise exception 'forbidden';
+  end if;
+  if p_to is null or p_to = auth.uid() then
+    raise exception 'same_owner';
+  end if;
+
+  select role into v_role from public.team_members
+    where team_id = v_proj.team_id and user_id = p_to;
+  if v_role is null then
+    raise exception 'not_a_member';
+  end if;
+  if v_role not in ('owner', 'editor') then
+    raise exception 'recipient_cannot_edit';
+  end if;
+
+  if p_version is not null and v_proj.version <> p_version then
+    raise exception 'version_conflict';
+  end if;
+
+  perform set_config('app.transfer_projet', p_projet::text, true);
+  update public.projets set owner_id = p_to where id = p_projet
+    returning version into v_version;
+
+  return json_build_object('version', v_version, 'owner_id', p_to);
+end;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- 7. Sécurité au niveau des lignes (RLS)
 -- ---------------------------------------------------------------------------
@@ -367,6 +424,8 @@ revoke all on public.profiles, public.teams, public.team_codes,
 revoke all on function public.create_team(text)               from public, anon;
 revoke all on function public.join_team(text)                 from public, anon;
 revoke all on function public.regenerate_team_code(uuid, text) from public, anon;
+revoke all on function public.transfer_projet(uuid, uuid, integer) from public, anon;
 grant execute on function public.create_team(text)               to authenticated;
 grant execute on function public.join_team(text)                 to authenticated;
 grant execute on function public.regenerate_team_code(uuid, text) to authenticated;
+grant execute on function public.transfer_projet(uuid, uuid, integer) to authenticated;

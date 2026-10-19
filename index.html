@@ -2073,6 +2073,14 @@ const translations = {
     clMovePersonal: 'Mes projets (perso)',
     clMoveNotSynced: 'Ce projet n\'est pas encore synchronisé. Réessaie dans un instant.',
     clMoveDenied: 'Déplacement refusé (seul le créateur du projet peut le déplacer).',
+    clTransfer: 'Transférer…',
+    clTransferTitle: 'Transférer la propriété à…',
+    clTransferMsg: 'Le projet reste dans l\'équipe et tu y restes éditeur. Le transfert est immédiat, sans acceptation.',
+    clTransferNoMember: 'Aucun autre éditeur dans cette équipe. Le destinataire doit avoir rejoint l\'équipe avec le code éditeur.',
+    clTransferConfirm: 'Transférer la propriété de ce projet à',
+    clTransferDone: 'Propriété transférée à',
+    clTransferDenied: 'Transfert refusé.',
+    clTransferErrRecipient: 'Le destinataire doit être éditeur ou propriétaire de l\'équipe.',
     clSendCloud: 'Envoyer au cloud',
     clBadgeLocal: 'Sur cet appareil uniquement',
     clBadgeReadonly: 'Lecture seule',
@@ -2486,6 +2494,14 @@ const translations = {
     clMovePersonal: 'My projects (personal)',
     clMoveNotSynced: 'This project is not synced yet. Try again in a moment.',
     clMoveDenied: 'Move refused (only the project\'s creator can move it).',
+    clTransfer: 'Transfer…',
+    clTransferTitle: 'Transfer ownership to…',
+    clTransferMsg: 'The project stays in the team and you remain an editor. The transfer is immediate, no acceptance needed.',
+    clTransferNoMember: 'No other editor in this team. The recipient must have joined the team with the editor code.',
+    clTransferConfirm: 'Transfer ownership of this project to',
+    clTransferDone: 'Ownership transferred to',
+    clTransferDenied: 'Transfer refused.',
+    clTransferErrRecipient: 'The recipient must be an editor or owner of the team.',
     clSendCloud: 'Send to cloud',
     clBadgeLocal: 'On this device only',
     clBadgeReadonly: 'Read-only',
@@ -5990,6 +6006,7 @@ function cloudErrorMessage(err){
   if (m.includes('already registered') || m.includes('already been registered')) return t('clAuthErrExists');
   if (m.includes('password should be at least') || m.includes('weak password')) return t('clAuthErrWeakPwd');
   if (m.includes('invalid_code')) return t('clTeamErrInvalidCode');
+  if (m.includes('recipient_cannot_edit') || m.includes('not_a_member')) return t('clTransferErrRecipient');
   if (m.includes('failed to fetch') || m.includes('networkerror') || m.includes('network request failed') || m.includes('load failed')) return t('clErrNetwork');
   return raw;
 }
@@ -6519,6 +6536,59 @@ async function cloudMoveProjet(proj){
   } catch (e){
     setSyncState('error', cloudErrorMessage(e));
     alert(t('clMoveDenied') + '\n' + cloudErrorMessage(e));
+  }
+  renderNomenclatureList();
+}
+
+// Transfers ownership of a team project to another editor/owner of the same
+// team. Immediate (no acceptance); the project stays in the team and the former
+// owner keeps their team role.
+async function cloudTransferProjet(proj){
+  if (!sb || !cloudUser) return;
+  if (!proj.teamId || !projetAccess(proj).canMove) return;
+  const synced = () => {
+    const c = getWorkspaceProjects().find(x => x.id === proj.id);
+    return (c && !c.dirty && c.version != null) ? c : null;
+  };
+  if (!synced()){ alert(t('clMoveNotSynced')); return; }
+
+  let members = [];
+  try {
+    const res = await sb.from('team_members').select('user_id, role, profiles(email)').eq('team_id', proj.teamId);
+    if (res.error) throw res.error;
+    members = (res.data || []).filter(m => m.user_id !== cloudUser.id && (m.role === 'owner' || m.role === 'editor'));
+  } catch (e){
+    alert(cloudErrorMessage(e));
+    return;
+  }
+  if (!members.length){ alert(t('clTransferNoMember')); return; }
+
+  const labelOf = m => (m.profiles && m.profiles.email) || m.user_id;
+  const choice = await showChoiceDialog(t('clTransferTitle'),
+    (proj.title || t('untitledProject')) + '\n' + t('clTransferMsg'),
+    members.map(m => ({ label: labelOf(m), value: m })).concat([{ label: t('cancelBtn'), value: null }]));
+  if (!choice) return;
+  const email = labelOf(choice);
+  if (!(await showConfirmModal(t('clTransferConfirm') + ' ' + email + ' ?'))) return;
+
+  const current = synced();
+  if (!current){ alert(t('clMoveNotSynced')); return; }
+  setSyncState('syncing');
+  try {
+    const res = await sb.rpc('transfer_projet', { p_projet: proj.id, p_to: choice.user_id, p_version: current.version });
+    if (res.error) throw res.error;
+    cloudPatchLocalMeta(proj.id, { ownerId: choice.user_id, version: res.data.version });
+    setSyncState('idle');
+    alert(t('clTransferDone') + ' ' + email);
+  } catch (e){
+    if (String(e && e.message).includes('version_conflict')){
+      setSyncState('idle');
+      await cloudPullAll();
+      alert(t('clConflictMsg'));
+    } else {
+      setSyncState('error', cloudErrorMessage(e));
+      alert(t('clTransferDenied') + '\n' + cloudErrorMessage(e));
+    }
   }
   renderNomenclatureList();
 }
@@ -7241,6 +7311,7 @@ function renderNomenclatureList(){
     };
     addLink(t('exportBtn'), () => exportProjet(proj));
     if (proj.cloud && access.canMove && cloudTeams.some(tm => tm.role !== 'viewer')) addLink(t('clMove'), () => cloudMoveProjet(proj));
+    if (proj.cloud && proj.teamId && access.canMove) addLink(t('clTransfer'), () => cloudTransferProjet(proj));
     if (!proj.cloud && cloudUser) addLink(t('clSendCloud'), () => cloudSendLocalProjet(proj));
     tile.appendChild(links);
 

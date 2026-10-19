@@ -17,6 +17,7 @@ Avec Supabase, on peut se connecter (e-mail + mot de passe, ou compte Google), r
 - **Perso** : un projet n'est visible que par son créateur.
 - **Équipe** : un projet d'équipe est visible par tous les membres. On rejoint une équipe avec un code d'invitation. Chaque équipe a deux codes : un code **éditeur** (peut modifier) et un code **lecteur** (consultation seule, les modifications ne sont jamais enregistrées).
 - Seul le **propriétaire** de l'équipe peut supprimer un projet d'équipe, gérer les membres, régénérer les codes ou supprimer l'équipe. Seul le créateur d'un projet peut le déplacer entre « perso » et une équipe.
+- Le propriétaire d'un projet d'équipe peut en **transférer la propriété** (lien « Transférer… » sur la tuile) à un autre éditeur de l'équipe : le transfert est immédiat, sans acceptation, le projet reste dans l'équipe et l'ancien propriétaire y reste éditeur. Après une mise à jour de l'outil, relancer `supabase-setup.sql` (il est ré-exécutable) pour ajouter la fonction `transfer_projet`.
 - Si deux personnes modifient le même projet, la seconde à enregistrer est prévenue et choisit : prendre la version du cloud ou écraser avec la sienne.
 - Hors connexion, les modifications restent sur l'appareil et partent dès que le réseau revient.
 
