@@ -10182,10 +10182,10 @@ function pvAddFunction(){
 // ---------- SVG ----------
 // Text centred in a box: HTML (foreignObject) for the live preview, plain
 // wrapped SVG <text> for exports (canvas can't render foreignObject).
-function pvBoxText(x, y, w, h, text, fontSize, useFO, bold){
+function pvBoxText(x, y, w, h, text, fontSize, useFO, bold, halo){
   const weight = bold ? 'bold' : 'normal';
   if (useFO){
-    return `<foreignObject x="${x}" y="${y}" width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;font:${weight} ${fontSize}px Arial, sans-serif;color:#1c1c1c;overflow:hidden;line-height:1.15;">${escapeHtml(text)}</div></foreignObject>`;
+    return `<foreignObject x="${x}" y="${y}" width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;font:${weight} ${fontSize}px Arial, sans-serif;color:#1c1c1c;overflow:hidden;line-height:1.15;${halo ? 'text-shadow:0 0 3px ' + halo + ',0 0 3px ' + halo + ';' : ''}">${escapeHtml(text)}</div></foreignObject>`;
   }
   let fs = fontSize;
   let lines = wrapTextForSvg(text, w, fs);
@@ -10196,7 +10196,7 @@ function pvBoxText(x, y, w, h, text, fontSize, useFO, bold){
   const lh = fs * 1.2;
   const startY = y + h / 2 - ((lines.length - 1) * lh) / 2;
   const tspans = lines.map((l, i) => `<tspan x="${x + w / 2}" y="${startY + i * lh}">${escapeHtml(l)}</tspan>`).join('');
-  return `<text font-size="${fs}" font-weight="${weight}" font-family="Arial, sans-serif" fill="#1c1c1c" text-anchor="middle" dominant-baseline="middle">${tspans}</text>`;
+  return `<text font-size="${fs}" font-weight="${weight}" font-family="Arial, sans-serif" fill="#1c1c1c"${halo ? ` stroke="${halo}" stroke-width="3" stroke-linejoin="round" paint-order="stroke"` : ''} text-anchor="middle" dominant-baseline="middle">${tspans}</text>`;
 }
 
 function buildPieuvreSvg(data, scale, useForeignObject, includeBackground){
@@ -10262,9 +10262,12 @@ function buildPieuvreSvg(data, scale, useForeignObject, includeBackground){
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W * scale}" height="${H * scale}" viewBox="0 0 ${W} ${H}">`;
   if (includeBackground) svg += `<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff" />`;
 
-  // 1) links (under the shapes)
+  // 1) links: FC straight to the product (under it), FP as one smooth curve
+  //    crossing the product (drawn over its fill, under its name)
   const labels = [];
   const counts = {};
+  let fcSvg = '', fpSvg = '';
+  const inProduct = (x, y) => ((x - cx) / PROD_RX) ** 2 + ((y - cy) / PROD_RY) ** 2 < 1;
   drawn.forEach(d => {
     const color = d.f.type === 'FP' ? FP_COLOR : FC_COLOR;
     const A = anchor(d.a, d);
@@ -10273,15 +10276,42 @@ function buildPieuvreSvg(data, scale, useForeignObject, includeBackground){
     const P = B
       ? { x: cx + (A.px * A.off + B.px * B.off) * 0.25, y: cy + (A.py * A.off + B.py * B.off) * 0.25 }
       : { x: cx + A.px * A.off * 0.5, y: cy + A.py * A.off * 0.5 };
-    const d2 = B ? `M ${A.x} ${A.y} L ${P.x} ${P.y} L ${B.x} ${B.y}` : `M ${A.x} ${A.y} L ${P.x} ${P.y}`;
-    svg += `<path d="${d2}" fill="none" stroke="${color}" stroke-width="${d.f.type === 'FP' ? 3 : 2.2}" stroke-linecap="round" stroke-linejoin="round" />`;
     const tt = 0.40 + 0.14 * (k % 2);
-    labels.push({ x: A.x + (P.x - A.x) * tt, y: A.y + (P.y - A.y) * tt, tag: d.tag, color });
+    if (B){
+      // quadratic Bézier from A to B whose midpoint M lies inside the product:
+      // halfway between its centre and its outline, on the side of the two
+      // elements (through the centre when they face each other)
+      const vx = (A.x + B.x) / 2 - cx, vy = (A.y + B.y) / 2 - cy;
+      const vl = Math.hypot(vx, vy);
+      let M = P;
+      if (vl > 1){
+        const ux = vx / vl, uy = vy / vl;
+        const edge = 1 / Math.hypot(ux / PROD_RX, uy / PROD_RY);
+        const depth = edge * 0.45 * Math.min(1, vl / 120);
+        M = { x: P.x + ux * depth, y: P.y + uy * depth };
+      }
+      const Q = { x: 2 * M.x - (A.x + B.x) / 2, y: 2 * M.y - (A.y + B.y) / 2 };
+      const at = t => ({
+        x: (1 - t) * (1 - t) * A.x + 2 * t * (1 - t) * Q.x + t * t * B.x,
+        y: (1 - t) * (1 - t) * A.y + 2 * t * (1 - t) * Q.y + t * t * B.y
+      });
+      // tag on the A side, between the element and the product outline
+      let tIn = 0.5;
+      for (let t = 0; t <= 0.5; t += 0.01){ const q = at(t); if (inProduct(q.x, q.y)){ tIn = t; break; } }
+      fpSvg += `<path d="M ${A.x} ${A.y} Q ${Q.x} ${Q.y} ${B.x} ${B.y}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" />`;
+      const L = at(tIn * (tt + 0.1));
+      labels.push({ x: L.x, y: L.y, tag: d.tag, color });
+    } else {
+      fcSvg += `<path d="M ${A.x} ${A.y} L ${P.x} ${P.y}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" />`;
+      labels.push({ x: A.x + (P.x - A.x) * tt, y: A.y + (P.y - A.y) * tt, tag: d.tag, color });
+    }
   });
+  svg += fcSvg;
 
   // 2) product and elements
   svg += `<ellipse cx="${cx}" cy="${cy}" rx="${PROD_RX}" ry="${PROD_RY}" fill="#DCEBFB" stroke="#2E6DA4" stroke-width="2.5" />`;
-  svg += pvBoxText(cx - 76, cy - 36, 152, 72, data.product || '', 14, useForeignObject, true);
+  svg += fpSvg;
+  svg += pvBoxText(cx - 76, cy - 36, 152, 72, data.product || '', 14, useForeignObject, true, '#DCEBFB');
   elements.forEach((e, i) => {
     const p = pos[e.id];
     const x = p.x - BOX_W / 2, y = p.y - BOX_H / 2;
