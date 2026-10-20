@@ -44,7 +44,7 @@ Les projets existants dans le navigateur ne sont pas perdus : à la première co
 3. Dans MecaBench : **Mon compte > Accès API (Claude)…** > créer un jeton (portée *Lecture et modification* ou *Lecture seule*). Il n'est affiché qu'une fois.
 4. Dans Claude, ajouter un connecteur personnalisé avec l'adresse fournie : `https://<projet>.supabase.co/functions/v1/mecabench-mcp/<jeton>` (ou la même adresse sans jeton et l'en-tête `Authorization: Bearer <jeton>` si le client le permet).
 
-Outils exposés : `list_projects`, `get_project`, `create_project`, `rename_project`, `add_parts`, `update_part`, `delete_parts`, `save_produit`. Il n'y a volontairement aucun outil de suppression de projet ou de produit. Un jeton se révoque à tout moment (même écran) ; l'adresse contenant le jeton est un secret : ne la partage pas.
+Outils exposés : `list_projects`, `get_project`, `create_project`, `rename_project`, `add_parts`, `update_part`, `delete_parts`, `save_produit`. Il n'y a volontairement aucun outil de suppression de projet ou de produit. `save_produit` écrit les blocs comme l'appli : packs, sachets (`kind: 'sachet'`), packs spéciaux (`kind: 'special'`) et renvois entre blocs (`pack: <key>`), et `get_project` les relit dans le même format. Un jeton se révoque à tout moment (même écran) ; l'adresse contenant le jeton est un secret : ne la partage pas.
 
 ## Mettre en ligne avec GitHub Pages
 
