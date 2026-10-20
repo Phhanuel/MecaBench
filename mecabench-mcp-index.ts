@@ -14,7 +14,7 @@
 // (Fichier volontairement en JavaScript pur : il est aussi testé sous Node.)
 // =============================================================================
 
-const SERVER_INFO = { name: 'mecabench', version: '1.1.0' };
+const SERVER_INFO = { name: 'mecabench', version: '1.2.0' };
 const SUPPORTED_PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const MAX_OUTPUT_CHARS = 150000;
 const MAX_FIELD = 500;
@@ -67,7 +67,7 @@ const TOOLS = [
   {
     name: 'add_parts',
     description:
-      "Ajoute des pièces à la base de données du projet. Champs : reference, nom, prix (nombre, en €), matiere, categorie, pm (prix matière), va (valeur ajoutée), group (nom de groupe, créé si besoin). " +
+      "Ajoute des pièces à la base de données du projet. Champs : reference, nom, prix (nombre, en €), matiere, categorie, pm (prix matière), va (valeur ajoutée), group (nom de groupe, ou chemin de sous-groupes « Parent > Enfant », créé si besoin). " +
       "Par défaut, une pièce dont la référence existe déjà est ignorée (on_duplicate_reference='add' pour l'ajouter quand même).",
     inputSchema: {
       type: 'object',
@@ -94,7 +94,7 @@ const TOOLS = [
   },
   {
     name: 'update_part',
-    description: "Modifie une pièce existante (par part_id). Champs modifiables : reference, nom, prix, matiere, categorie, pm, va, group ('' pour retirer du groupe). Les produits qui utilisent la pièce sont mis à jour.",
+    description: "Modifie une pièce existante (par part_id). Champs modifiables : reference, nom, prix, matiere, categorie, pm, va, group (nom ou chemin « Parent > Enfant », créé si besoin ; '' pour retirer du groupe). Les produits qui utilisent la pièce sont mis à jour.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -240,13 +240,30 @@ function findGroup(data, name) {
   return data.dbGroups.find((g) => str(g.name).toLowerCase() === key && !g.parentId) || data.dbGroups.find((g) => str(g.name).toLowerCase() === key) || null;
 }
 
+// name : nom simple (« Vis ») ou chemin de sous-groupes séparés par « > » (« Limon > Limon simple > Sapin »).
+// Chaque niveau est cherché parmi les enfants du niveau précédent et créé s'il manque.
 function ensureGroup(data, name) {
-  let g = findGroup(data, name);
-  if (!g) {
-    g = { id: 'g' + (maxNumericId(data.dbGroups, /^g/) + 1), name: str(name, 100), collapsed: false, parentId: null };
-    data.dbGroups.push(g);
+  const parts = String(name).split('>').map((x) => str(x, 100)).filter(Boolean);
+  if (parts.length <= 1) {
+    let g = findGroup(data, name);
+    if (!g) {
+      g = { id: 'g' + (maxNumericId(data.dbGroups, /^g/) + 1), name: str(name, 100), collapsed: false, parentId: null };
+      data.dbGroups.push(g);
+    }
+    return g;
   }
-  return g;
+  if (parts.length > 6) throw new ToolError('Chemin de groupe trop profond (6 niveaux max).');
+  let parent = null;
+  for (const part of parts) {
+    const key = part.toLowerCase();
+    let g = data.dbGroups.find((x) => str(x.name).toLowerCase() === key && (x.parentId || null) === parent);
+    if (!g) {
+      g = { id: 'g' + (maxNumericId(data.dbGroups, /^g/) + 1), name: part, collapsed: false, parentId: parent };
+      data.dbGroups.push(g);
+    }
+    parent = g.id;
+  }
+  return data.dbGroups.find((x) => x.id === parent);
 }
 
 function normalizeData(data) {
