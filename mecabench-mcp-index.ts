@@ -14,7 +14,7 @@
 // (Fichier volontairement en JavaScript pur : il est aussi testé sous Node.)
 // =============================================================================
 
-const SERVER_INFO = { name: 'mecabench', version: '1.0.0' };
+const SERVER_INFO = { name: 'mecabench', version: '1.2.0' };
 const SUPPORTED_PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const MAX_OUTPUT_CHARS = 150000;
 const MAX_FIELD = 500;
@@ -67,7 +67,7 @@ const TOOLS = [
   {
     name: 'add_parts',
     description:
-      "Ajoute des pièces à la base de données du projet. Champs : reference, nom, prix (nombre, en €), matiere, categorie, pm (prix matière), va (valeur ajoutée), group (nom de groupe, créé si besoin). " +
+      "Ajoute des pièces à la base de données du projet. Champs : reference, nom, prix (nombre, en €), matiere, categorie, pm (prix matière), va (valeur ajoutée), group (nom de groupe, ou chemin de sous-groupes « Parent > Enfant », créé si besoin). " +
       "Par défaut, une pièce dont la référence existe déjà est ignorée (on_duplicate_reference='add' pour l'ajouter quand même).",
     inputSchema: {
       type: 'object',
@@ -94,7 +94,7 @@ const TOOLS = [
   },
   {
     name: 'update_part',
-    description: "Modifie une pièce existante (par part_id). Champs modifiables : reference, nom, prix, matiere, categorie, pm, va, group ('' pour retirer du groupe). Les produits qui utilisent la pièce sont mis à jour.",
+    description: "Modifie une pièce existante (par part_id). Champs modifiables : reference, nom, prix, matiere, categorie, pm, va, group (nom ou chemin « Parent > Enfant », créé si besoin ; '' pour retirer du groupe). Les produits qui utilisent la pièce sont mis à jour.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -126,9 +126,11 @@ const TOOLS = [
   {
     name: 'save_produit',
     description:
-      "Crée un produit (ou remplace le contenu de produit_id). 'tree' = liste de PACKS racines ; chaque nœud : { part_id | reference (pièce de la base de données), nom, quantity, children[] }. " +
-      "Un nœud qui désigne une pièce existante reprend sa référence et son nom. Sans correspondance, le nœud est une ligne libre (reference/nom donnés). " +
-      "Sans 'tree' avec produit_id, seuls title/notes sont modifiés.",
+      "Crée un produit (ou remplace TOUT le contenu de produit_id). 'tree' = liste de BLOCS racines, sur deux niveaux comme dans l'appli. " +
+      "Bloc racine : { kind: 'pack' (défaut) | 'sachet' | 'special', key (identifiant libre pour y renvoyer), reference, nom, quantity, va, children[] }. Un bloc racine n'est jamais confondu avec une pièce. " +
+      "Ligne d'un bloc : soit une pièce { part_id | reference, quantity }, soit un renvoi vers un autre bloc racine { pack: <key ou nom du bloc>, quantity } (ex. un sachet dans un pack, des packs dans un pack spécial). " +
+      "Une ligne sans pièce correspondante devient une ligne libre (reference/nom donnés). Une ligne ne peut pas avoir d'enfants. Un pack spécial ne peut pas être référencé. " +
+      "get_project renvoie le même format (kind/key/pack), donc on peut relire, modifier et réenregistrer sans perdre les liens. Sans 'tree' avec produit_id, seuls title/notes sont modifiés.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -144,8 +146,12 @@ const TOOLS = [
         node: {
           type: 'object',
           properties: {
+            kind: { type: 'string', enum: ['pack', 'sachet', 'special'], description: 'Bloc racine uniquement' },
+            key: { type: 'string', description: 'Bloc racine : identifiant pour les renvois (pack)' },
+            pack: { type: 'string', description: "Ligne : renvoi vers un bloc racine (key ou nom)" },
             part_id: { type: 'string' }, reference: { type: 'string' }, nom: { type: 'string' },
             quantity: { type: ['number', 'string'] },
+            va: { type: ['number', 'string'], description: 'Bloc racine : valeur ajoutée' },
             children: { type: 'array', items: { $ref: '#/$defs/node' } },
           },
           additionalProperties: false,
@@ -234,13 +240,30 @@ function findGroup(data, name) {
   return data.dbGroups.find((g) => str(g.name).toLowerCase() === key && !g.parentId) || data.dbGroups.find((g) => str(g.name).toLowerCase() === key) || null;
 }
 
+// name : nom simple (« Vis ») ou chemin de sous-groupes séparés par « > » (« Limon > Limon simple > Sapin »).
+// Chaque niveau est cherché parmi les enfants du niveau précédent et créé s'il manque.
 function ensureGroup(data, name) {
-  let g = findGroup(data, name);
-  if (!g) {
-    g = { id: 'g' + (maxNumericId(data.dbGroups, /^g/) + 1), name: str(name, 100), collapsed: false, parentId: null };
-    data.dbGroups.push(g);
+  const parts = String(name).split('>').map((x) => str(x, 100)).filter(Boolean);
+  if (parts.length <= 1) {
+    let g = findGroup(data, name);
+    if (!g) {
+      g = { id: 'g' + (maxNumericId(data.dbGroups, /^g/) + 1), name: str(name, 100), collapsed: false, parentId: null };
+      data.dbGroups.push(g);
+    }
+    return g;
   }
-  return g;
+  if (parts.length > 6) throw new ToolError('Chemin de groupe trop profond (6 niveaux max).');
+  let parent = null;
+  for (const part of parts) {
+    const key = part.toLowerCase();
+    let g = data.dbGroups.find((x) => str(x.name).toLowerCase() === key && (x.parentId || null) === parent);
+    if (!g) {
+      g = { id: 'g' + (maxNumericId(data.dbGroups, /^g/) + 1), name: part, collapsed: false, parentId: parent };
+      data.dbGroups.push(g);
+    }
+    parent = g.id;
+  }
+  return data.dbGroups.find((x) => x.id === parent);
 }
 
 function normalizeData(data) {
@@ -305,55 +328,148 @@ function deleteParts(data, ids) {
   return { deleted, refused, not_found: missing };
 }
 
-// arbre de nœuds -> lignes plates (ordre hiérarchique, ids = rang + 1, comme l'appli)
-function treeToRows(tree, data) {
+// arbre de blocs -> lignes plates, au format de l'appli :
+//  - ligne racine (parent '') = pack, sachet (isSachet) ou pack spécial (special)
+//  - ligne enfant = pièce (dbId), renvoi vers un bloc racine (packRefId) ou ligne libre
+// Les ids sont attribués dans l'ordre (rang + 1), comme l'appli.
+function treeToRows(tree, data, oldRows) {
+  if (!Array.isArray(tree)) throw new ToolError("'tree' doit être une liste de blocs.");
   const rows = [];
   const unmatched = [];
   let count = 0;
   const partById = new Map(data.db.map((p) => [String(p.id), p]));
   const partByRef = new Map();
   for (const p of data.db) { const k = str(p.reference).toLowerCase(); if (k && !partByRef.has(k)) partByRef.set(k, p); }
-  function walk(nodes, parentId, depth) {
-    if (!Array.isArray(nodes)) return;
-    if (depth > MAX_DEPTH) throw new ToolError(`Arbre trop profond (max ${MAX_DEPTH} niveaux).`);
-    for (const n of nodes) {
-      if (++count > MAX_NODES) throw new ToolError(`Trop de lignes (max ${MAX_NODES}).`);
-      let part = null;
-      if (n.part_id !== undefined && n.part_id !== null && n.part_id !== '') {
-        part = partById.get(String(n.part_id));
-        if (!part) throw new ToolError(`Pièce introuvable : part_id ${n.part_id}`);
-      } else if (str(n.reference)) {
-        part = partByRef.get(str(n.reference).toLowerCase()) || null;
-      }
-      const id = String(rows.length + 1);
-      const qty = numStr(n.quantity) || '1';
-      const row = { id, nombre: qty, reference: part ? part.reference : str(n.reference) || 'Référence', nom: part ? part.nom : str(n.nom) || 'Nom', parent: parentId };
-      if (part) row.dbId = part.id;
-      else if (str(n.reference)) unmatched.push(str(n.reference));
-      rows.push(row);
-      walk(n.children, id, depth + 1);
+  // couleur d'aperçu : reprise de l'ancien bloc de même type et même nom
+  const oldColor = new Map();
+  for (const r of oldRows || []) if (!str(r.parent) && r.previewColor) oldColor.set(blockKind(r) + '|' + str(r.nom).toLowerCase(), r.previewColor);
+
+  // 1) blocs racines : ids et clés de renvoi
+  const roots = [];
+  const byKey = new Map();
+  const byNom = new Map();
+  let nextId = 1; // ordre de l'appli : chaque bloc suivi de ses lignes
+  tree.forEach((n, i) => {
+    if (!n || typeof n !== 'object') throw new ToolError(`Bloc ${i + 1} invalide.`);
+    if (n.pack !== undefined || n.part_id !== undefined) throw new ToolError(`Bloc racine ${i + 1} : 'pack' et 'part_id' ne sont permis que dans les lignes d'un bloc.`);
+    const kind = n.kind || 'pack';
+    if (!['pack', 'sachet', 'special'].includes(kind)) throw new ToolError(`Bloc ${i + 1} : kind inconnu « ${n.kind} ».`);
+    const nom = str(n.nom);
+    if (!nom) throw new ToolError(`Bloc racine ${i + 1} : 'nom' est obligatoire.`);
+    const id = String(nextId);
+    nextId += 1 + (Array.isArray(n.children) ? n.children.length : 0);
+    const key = str(n.key);
+    if (key) {
+      if (byKey.has(key.toLowerCase())) throw new ToolError(`Clé de bloc en double : « ${key} ».`);
+      byKey.set(key.toLowerCase(), id);
     }
+    const nk = nom.toLowerCase();
+    byNom.set(nk, byNom.has(nk) ? null : id); // null = nom ambigu
+    roots.push({ n, kind, nom, id });
+  });
+  if (roots.length > MAX_NODES) throw new ToolError(`Trop de lignes (max ${MAX_NODES}).`);
+  count = roots.length;
+
+  const resolvePack = (ref, where) => {
+    const k = str(ref).toLowerCase();
+    if (byKey.has(k)) return byKey.get(k);
+    if (byNom.has(k)) {
+      if (byNom.get(k) === null) throw new ToolError(`${where} : plusieurs blocs s'appellent « ${ref} », utilise 'key'.`);
+      return byNom.get(k);
+    }
+    throw new ToolError(`${where} : bloc « ${ref} » introuvable (key ou nom d'un bloc racine).`);
+  };
+
+  // 2) lignes : chaque bloc racine suivi de ses lignes (les ids des racines sont connus d'avance,
+  //    un renvoi peut donc viser un bloc placé plus loin)
+  const rootRow = new Map();
+  for (const { n, kind, nom, id } of roots) {
+    const row = { id, nombre: numStr(n.quantity) || '1', reference: str(n.reference) || 'ref', nom, parent: '' };
+    if (kind === 'sachet') row.isSachet = true;
+    if (kind === 'special') row.special = true;
+    if (numStr(n.va)) row.va = numStr(n.va);
+    const color = oldColor.get(kind + '|' + nom.toLowerCase());
+    if (color) row.previewColor = color;
+    rootRow.set(id, row);
   }
-  walk(tree, '', 1);
+  const refs = new Map(); // id racine -> ids racines référencés
+  for (const { n, nom, id } of roots) {
+    rows.push(rootRow.get(id));
+    refs.set(id, []);
+    (n.children || []).forEach((c, j) => {
+      const where = `« ${nom} », ligne ${j + 1}`;
+      if (++count > MAX_NODES) throw new ToolError(`Trop de lignes (max ${MAX_NODES}).`);
+      if (!c || typeof c !== 'object') throw new ToolError(`${where} invalide.`);
+      if (Array.isArray(c.children) && c.children.length) throw new ToolError(`${where} : une ligne ne peut pas avoir d'enfants. Crée un bloc racine et renvoie-y avec 'pack'.`);
+      if (c.kind !== undefined || c.key !== undefined) throw new ToolError(`${where} : 'kind' et 'key' sont réservés aux blocs racines.`);
+      const rowId = String(rows.length + 1);
+      const qty = numStr(c.quantity) || '1';
+      if (c.pack !== undefined) {
+        const target = resolvePack(c.pack, where);
+        const t = rootRow.get(target);
+        if (t.special) throw new ToolError(`${where} : un pack spécial ne peut pas être inclus dans un autre bloc.`);
+        if (target === id) throw new ToolError(`${where} : un bloc ne peut pas se contenir lui-même.`);
+        rows.push({ id: rowId, nombre: qty, reference: t.reference, nom: t.nom, parent: id, packRefId: target });
+        refs.get(id).push(target);
+        return;
+      }
+      let part = null;
+      if (c.part_id !== undefined && c.part_id !== null && c.part_id !== '') {
+        part = partById.get(String(c.part_id));
+        if (!part) throw new ToolError(`${where} : pièce introuvable (part_id ${c.part_id}).`);
+      } else if (str(c.reference)) {
+        part = partByRef.get(str(c.reference).toLowerCase()) || null;
+      }
+      const row = { id: rowId, nombre: qty, reference: part ? part.reference : str(c.reference) || 'Référence', nom: part ? part.nom : str(c.nom) || 'Nom', parent: id };
+      if (part) row.dbId = part.id;
+      else unmatched.push(`${nom} > ${str(c.reference) || str(c.nom)}`);
+      rows.push(row);
+    });
+  }
+
+  // 3) pas de boucle entre blocs (A contient B qui contient A)
+  const state = new Map();
+  const visit = (id, path) => {
+    if (state.get(id) === 2) return;
+    if (state.get(id) === 1) throw new ToolError(`Boucle entre blocs : ${path.concat(id).map((x) => rootRow.get(x).nom).join(' > ')}.`);
+    state.set(id, 1);
+    for (const t of refs.get(id) || []) visit(t, path.concat(id));
+    state.set(id, 2);
+  };
+  for (const { id } of roots) visit(id, []);
   return { rows, unmatched };
 }
 
+function blockKind(r) {
+  return r.special ? 'special' : r.isSachet ? 'sachet' : 'pack';
+}
+
+// lignes plates -> arbre de blocs (même format que l'entrée de save_produit)
 function rowsToTree(rows) {
-  const byParent = new Map();
-  for (const r of rows || []) {
-    const k = String(r.parent || '');
-    if (!byParent.has(k)) byParent.set(k, []);
-    byParent.get(k).push(r);
+  const list = rows || [];
+  const kids = new Map();
+  for (const r of list) {
+    const k = str(r.parent);
+    if (!k) continue;
+    if (!kids.has(k)) kids.set(k, []);
+    kids.get(k).push(r);
   }
-  const build = (parent) => (byParent.get(parent) || []).map((r) => {
+  const line = (r) => {
     const n = { reference: r.reference, nom: r.nom, quantity: r.nombre };
-    if (r.dbId) n.part_id = r.dbId;
-    if (r.packRefId) n.pack_ref_row = r.packRefId;
-    const kids = build(String(r.id));
-    if (kids.length) n.children = kids;
+    if (r.packRefId) {
+      n.pack = 'r' + String(r.packRefId).trim();
+    } else if (r.dbId) n.part_id = r.dbId;
+    const sub = kids.get(String(r.id).trim());
+    if (sub && sub.length) n.children = sub.map(line); // ancien format imbriqué
+    return n;
+  };
+  return list.filter((r) => !str(r.parent)).map((r) => {
+    const n = { kind: blockKind(r), key: 'r' + String(r.id).trim(), reference: r.reference, nom: r.nom, quantity: r.nombre };
+    if (r.va) n.va = r.va;
+    const sub = kids.get(String(r.id).trim());
+    if (sub && sub.length) n.children = sub.map(line);
     return n;
   });
-  return build('');
 }
 
 function saveProduit(data, args) {
@@ -368,7 +484,7 @@ function saveProduit(data, args) {
   if (args.title !== undefined) produit.title = str(args.title, 200);
   if (args.notes !== undefined) produit.notes = String(args.notes).slice(0, 20000);
   if (Array.isArray(args.tree)) {
-    const r = treeToRows(args.tree, data);
+    const r = treeToRows(args.tree, data, produit.rows);
     produit.rows = r.rows;
     unmatched = r.unmatched;
   }
