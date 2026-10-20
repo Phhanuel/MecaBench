@@ -40,7 +40,7 @@ Les projets existants dans le navigateur ne sont pas perdus : à la première co
 **Connecteur Claude (API)** : permet à Claude de lire et remplir tes projets directement, avec tes droits.
 
 1. Relancer `supabase-setup.sql` en entier (sections 9 et 10 : jetons et fonctions `api_*`).
-2. Supabase > **Edge Functions** > **Deploy a new function** > *Via Editor* : nom `mecabench-mcp`, coller `supabase/functions/mecabench-mcp/index.ts`, **Deploy**. Puis, dans les réglages de la fonction, désactiver **Verify JWT** (l'authentification se fait avec le jeton MecaBench). En ligne de commande : `supabase functions deploy mecabench-mcp --no-verify-jwt`.
+2. Supabase > **Edge Functions** > **Deploy a new function** > *Via Editor* : nom `mecabench-mcp`, coller le contenu de `mecabench-mcp-index.ts`, **Deploy**. Puis, dans les réglages de la fonction, désactiver **Verify JWT** (l'authentification se fait avec le jeton MecaBench). En ligne de commande : `supabase functions deploy mecabench-mcp --no-verify-jwt`.
 3. Dans MecaBench : **Mon compte > Accès API (Claude)…** > créer un jeton (portée *Lecture et modification* ou *Lecture seule*). Il n'est affiché qu'une fois.
 4. Dans Claude, ajouter un connecteur personnalisé avec l'adresse fournie : `https://<projet>.supabase.co/functions/v1/mecabench-mcp/<jeton>` (ou la même adresse sans jeton et l'en-tête `Authorization: Bearer <jeton>` si le client le permet).
 
@@ -75,7 +75,7 @@ Outils exposés : `list_projects`, `get_project`, `create_project`, `rename_proj
 .
 ├── index.html           # l'outil complet (interface + logique de génération du CSV)
 ├── supabase-setup.sql   # tables, règles de sécurité et fonctions à exécuter dans Supabase
-├── supabase/functions/mecabench-mcp/index.ts   # connecteur Claude (fonction Edge)
+├── mecabench-mcp-index.ts   # connecteur Claude (fonction Edge `mecabench-mcp`)
 ├── confidentialite.html
 └── README.md
 ```
