@@ -8127,7 +8127,8 @@ function navSame(a, b){
 
 function updateNavUi(){
   const btn = document.getElementById('back-prev-btn');
-  if (btn) btn.style.display = navIdx > 0 ? 'inline-block' : 'none';
+  // the Produit editor has its own "← Base de données" button: no second back button there
+  if (btn) btn.style.display = navIdx > 0 && navCurrent.screen !== 'packs' ? 'inline-block' : 'none';
 }
 
 // Called by every show*/open* function once its screen is displayed.
