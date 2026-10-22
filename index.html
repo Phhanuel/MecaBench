@@ -965,6 +965,8 @@
           <div class="row-actions" style="margin-bottom:12px;">
             <button class="btn" id="db-add-row" data-i18n="dbAddRow">+ Ajouter un produit</button>
             <button class="btn" id="db-add-group-btn" data-i18n="dbAddGroupBtn">+ Nouveau groupe</button>
+            <button class="btn" id="db-collapse-all-btn" data-i18n="dbCollapseAllBtn">▶ Tout replier</button>
+            <button class="btn" id="db-expand-all-btn" data-i18n="dbExpandAllBtn">▼ Tout déplier</button>
           </div>
           <div class="row-actions" style="margin-bottom:12px; flex-wrap:wrap;">
             <input type="text" id="db-search-ref" data-i18n-placeholder="dbSearchRefPlaceholder" placeholder="Référence..." style="max-width:200px; flex:1;">
@@ -2034,6 +2036,8 @@ const translations = {
     dbSearchMatierePlaceholder: 'Matière...',
     dbSearchEmpty: 'Aucun produit ne correspond à la recherche.',
     dbAddGroupBtn: '+ Nouveau groupe',
+    dbCollapseAllBtn: '▶ Tout replier',
+    dbExpandAllBtn: '▼ Tout déplier',
     dbGroupModalTitleNew: 'Nouveau groupe',
     dbGroupModalTitleRename: 'Renommer le groupe',
     dbGroupModalNameLabel: 'Nom du groupe',
@@ -2531,6 +2535,8 @@ const translations = {
     dbSearchMatierePlaceholder: 'Material...',
     dbSearchEmpty: 'No product matches the search.',
     dbAddGroupBtn: '+ New group',
+    dbCollapseAllBtn: '▶ Collapse all',
+    dbExpandAllBtn: '▼ Expand all',
     dbGroupModalTitleNew: 'New group',
     dbGroupModalTitleRename: 'Rename group',
     dbGroupModalNameLabel: 'Group name',
@@ -11911,6 +11917,13 @@ document.getElementById('notes-table-btn').addEventListener('click', () => {
   document.getElementById('notes-table-modal-overlay').style.display = 'flex';
 });
 document.getElementById('db-add-group-btn').addEventListener('click', () => openDbGroupModal(null));
+// Fold or unfold every group (subgroups included) in one click.
+function setAllDbGroupsCollapsed(collapsed){
+  dbGroups.forEach(g => { g.collapsed = collapsed; });
+  renderDbTable();
+}
+document.getElementById('db-collapse-all-btn').addEventListener('click', () => setAllDbGroupsCollapsed(true));
+document.getElementById('db-expand-all-btn').addEventListener('click', () => setAllDbGroupsCollapsed(false));
 document.getElementById('db-search-ref').addEventListener('input', e => {
   dbSearchQuery.ref = e.target.value;
   renderDbTable();
