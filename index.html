@@ -795,15 +795,16 @@
   <button class="theme-toggle" id="back-prev-btn" type="button" style="position:static; display:none;" data-i18n="backPrevBtn">← Retour</button>
   <button class="theme-toggle" id="exit-produit-btn" type="button" style="position:static; display:none;" data-i18n="exitProduitBtn">← Base de données</button>
   <button class="theme-toggle" id="back-to-home-btn" type="button" style="position:static; display:none;" data-i18n="homeBtn">Accueil</button>
-  <button class="theme-toggle" id="tuto-btn" type="button" style="position:static; display:none;" data-i18n="tutoBtn">🎓 Tutoriel</button>
   <div style="display:flex; border:1px solid var(--line); border-radius:20px; overflow:hidden; background:var(--panel); box-shadow:0 2px 6px rgba(0,0,0,0.08);">
     <button class="lang-btn active" id="lang-btn-fr" type="button">FR</button>
     <button class="lang-btn" id="lang-btn-en" type="button">EN</button>
   </div>
   <button class="theme-toggle" id="theme-toggle" style="position:static;">☀️ <span id="theme-toggle-label">Clair</span></button>
 </div>
-<div style="position:fixed; top:64px; right:20px; z-index:500;">
-  <button class="theme-toggle" id="download-full-pdf-btn" type="button" style="position:static; display:none; width:100%;" data-i18n="downloadFullPdfBtn">📄 PDF complet</button>
+<div style="position:fixed; top:64px; right:20px; z-index:500; display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+  <button class="theme-toggle" id="download-full-pdf-btn" type="button" style="position:static; display:none;" data-i18n="downloadFullPdfBtn">📄 PDF complet</button>
+  <button class="theme-toggle" id="tuto-btn" type="button" style="position:static; display:none;" data-i18n="tutoBtn">🎓 Tutoriel nomenclature</button>
+  <button class="theme-toggle" id="tuto-site-btn" type="button" style="position:static; display:none;" data-i18n="tutoSiteBtn">🎓 Tutoriel du site</button>
 </div>
 
 <div id="workspace-view" style="display:none;">
@@ -888,8 +889,6 @@
 
     <p style="margin-top:56px; font-size:13px;">
       <a href="/confidentialite.html" data-i18n="privacyLink" style="color:inherit; opacity:.65; text-decoration:underline;">Confidentialité et conditions</a>
-      <span style="opacity:.4; margin:0 8px;">·</span>
-      <a href="#" id="tuto-site-link" data-i18n="tutoSiteLink" style="color:inherit; opacity:.65; text-decoration:underline;">Revoir la présentation du site</a>
     </p>
   </div>
 </div>
@@ -2133,8 +2132,8 @@ const translations = {
     tourPrev: 'Précédent',
     tourSkip: 'Fermer',
     tourFinish: 'Terminer',
-    tutoBtn: '🎓 Tutoriel',
-    tutoSiteLink: 'Revoir la présentation du site',
+    tutoBtn: '🎓 Tutoriel nomenclature',
+    tutoSiteBtn: '🎓 Tutoriel du site',
     tutoQuit: 'Quitter le tutoriel',
     tutoLater: 'Plus tard',
     tutoStartBtn: 'Commencer',
@@ -2630,8 +2629,8 @@ const translations = {
     tourPrev: 'Previous',
     tourSkip: 'Close',
     tourFinish: 'Finish',
-    tutoBtn: '🎓 Tutorial',
-    tutoSiteLink: 'Replay the site tour',
+    tutoBtn: '🎓 Nomenclature tutorial',
+    tutoSiteBtn: '🎓 Site tutorial',
     tutoQuit: 'Quit the tutorial',
     tutoLater: 'Later',
     tutoStartBtn: 'Start',
@@ -12096,7 +12095,7 @@ window.addEventListener('beforeunload', e => {
 // time, relaunched with the 🎓 button.
 // The same engine runs the shorter site tour (TUTO_SITE_STEPS): account,
 // link with Claude, teams, solo or team space. It is shown on the first
-// visit of the site and relaunched from the link at the bottom of the home page.
+// visit of the site and relaunched with the 🎓 button of the home page.
 // =============================================================================
 const TUTO_SEEN_KEYS = { site: 'mecabench_tuto_site_seen', nomenclature: 'mecabench_tuto_nomenclature_seen' };
 const TUTO_MODAL_OVERLAYS = ['confirm-modal-overlay', 'unsaved-modal-overlay', 'pack-modal-overlay', 'db-group-modal-overlay', 'brut-ignored-modal-overlay', 'notes-table-modal-overlay', 'full-pdf-modal-overlay'];
@@ -12166,8 +12165,8 @@ async function tutoBeginNomenclature(){
 
 const TUTO_NOMENCLATURE_STEPS = [
   { center: true, start: true, begin: tutoBeginNomenclature, text: {
-    fr: "<b>Bienvenue dans la Nomenclature !</b><br>Ce tutoriel te guide pas à pas dans l'outil <b>Nomenclature</b> : tu vas créer un projet, remplir sa base de données, puis construire une gamme avec un sachet, un pack et un pack spécial.<br><br>Tu peux le quitter à tout moment et le relancer plus tard avec le bouton <b>🎓 Tutoriel</b> en haut à droite.",
-    en: "<b>Welcome to the Nomenclature!</b><br>This tutorial walks you through the <b>Nomenclature</b> tool: you will create a project, fill its database, then build a range with a sachet, a pack and a special pack.<br><br>You can quit at any time and replay it later with the <b>🎓 Tutorial</b> button at the top right." } },
+    fr: "<b>Bienvenue dans la Nomenclature !</b><br>Ce tutoriel te guide pas à pas dans l'outil <b>Nomenclature</b> : tu vas créer un projet, remplir sa base de données, puis construire une gamme avec un sachet, un pack et un pack spécial.<br><br>Tu peux le quitter à tout moment et le relancer plus tard avec le bouton <b>🎓 Tutoriel nomenclature</b> en haut à droite.",
+    en: "<b>Welcome to the Nomenclature!</b><br>This tutorial walks you through the <b>Nomenclature</b> tool: you will create a project, fill its database, then build a range with a sachet, a pack and a special pack.<br><br>You can quit at any time and replay it later with the <b>🎓 Nomenclature tutorial</b> button at the top right." } },
   { target: tutoNewProjetTile,
     advance: () => tutoShown('project-view') || tutoShown('packs-view'),
     text: { fr: "Crée un nouveau projet : clique sur <b>+</b>.", en: "Create a new project: click <b>+</b>." } },
@@ -12237,8 +12236,8 @@ const TUTO_NOMENCLATURE_STEPS = [
   { target: () => tutoShown('notes-tab') ? tutoEl('notes-tab') : null, tall: true,
     text: { fr: "<b>Note de la gamme</b> : un bloc-notes libre, propre à chaque gamme. Mise en forme (gras, taille, couleur), tableaux et images. Écris par exemple les consignes de montage, puis pense à <b>Enregistrer</b>.", en: "<b>Range note</b>: a free notepad, one per range. Formatting (bold, size, colour), tables and images. Write the assembly instructions for example, then remember to <b>Save</b>." } },
   { center: true, finish: true, text: {
-    fr: "<b>Bravo, tu as fait le tour de la Nomenclature !</b><br>Ton projet contient une base de données, et une gamme avec un sachet, un pack et un pack spécial. Le bouton <b>📄 PDF complet</b> en haut exporte le tout.<br><br>Tu peux relancer ce tutoriel quand tu veux avec <b>🎓 Tutoriel</b>.",
-    en: "<b>Well done, you have toured the Nomenclature!</b><br>Your project has a database, and a range with a sachet, a pack and a special pack. The <b>📄 Full PDF</b> button at the top exports everything.<br><br>You can replay this tutorial any time with <b>🎓 Tutorial</b>." } },
+    fr: "<b>Bravo, tu as fait le tour de la Nomenclature !</b><br>Ton projet contient une base de données, et une gamme avec un sachet, un pack et un pack spécial. Le bouton <b>📄 PDF complet</b> en haut exporte le tout.<br><br>Tu peux relancer ce tutoriel quand tu veux avec <b>🎓 Tutoriel nomenclature</b>.",
+    en: "<b>Well done, you have toured the Nomenclature!</b><br>Your project has a database, and a range with a sachet, a pack and a special pack. The <b>📄 Full PDF</b> button at the top exports everything.<br><br>You can replay this tutorial any time with <b>🎓 Nomenclature tutorial</b>." } },
 ];
 
 // Site tour: a presentation, every step waits for "Suivant". The account and
@@ -12250,8 +12249,8 @@ function tutoAccountOrWorkspaceBtn(){
 
 const TUTO_SITE_STEPS = [
   { center: true, start: true, text: {
-    fr: "<b>Bienvenue sur MecaBench !</b><br>Petit tour du site avant de commencer : la connexion, la liaison avec Claude, les équipes et le choix entre travailler seul ou en équipe.<br><br>Tu peux le quitter à tout moment et le revoir avec le lien <b>Revoir la présentation du site</b>, en bas de la page d'accueil.",
-    en: "<b>Welcome to MecaBench!</b><br>A quick tour of the site before you start: logging in, the link with Claude, teams, and working on your own or as a team.<br><br>You can quit at any time and replay it with the <b>Replay the site tour</b> link at the bottom of the home page." } },
+    fr: "<b>Bienvenue sur MecaBench !</b><br>Petit tour du site avant de commencer : la connexion, la liaison avec Claude, les équipes et le choix entre travailler seul ou en équipe.<br><br>Tu peux le quitter à tout moment et le revoir avec le bouton <b>🎓 Tutoriel du site</b>, en haut à droite de la page d'accueil.",
+    en: "<b>Welcome to MecaBench!</b><br>A quick tour of the site before you start: logging in, the link with Claude, teams, and working on your own or as a team.<br><br>You can quit at any time and replay it with the <b>🎓 Site tutorial</b> button at the top right of the home page." } },
   { target: () => tutoEl('account-btn'), optional: true, text: {
     fr: "<b>Connexion</b> : ce bouton <b>Se connecter</b> ouvre la connexion ou la création de compte. Connecté, tes projets sont sauvegardés dans le cloud et tu les retrouves sur n'importe quel ordinateur. Sans compte, tout fonctionne aussi, mais reste enregistré dans ce navigateur.",
     en: "<b>Logging in</b>: this <b>Log in</b> button lets you log in or create an account. Once logged in, your projects are saved in the cloud and you find them on any computer. Without an account everything works too, but stays stored in this browser." } },
@@ -12265,8 +12264,8 @@ const TUTO_SITE_STEPS = [
     fr: "<b>Seul ou en équipe</b> : une fois connecté, tu choisis ton espace de travail : <b>👤 Seul</b> pour tes projets perso, visibles par toi seul, ou <b>👥 une équipe</b> pour ses projets partagés. Le bouton d'espace, en haut à droite, te permet d'en changer à tout moment.",
     en: "<b>Solo or team</b>: once logged in, you pick your workspace: <b>👤 Solo</b> for your personal projects, visible only to you, or <b>👥 a team</b> for its shared projects. The space button at the top right lets you switch at any time." } },
   { center: true, finish: true, text: {
-    fr: "<b>C'est tout pour le site !</b><br>Choisis maintenant un outil sur la page d'accueil. La première fois que tu ouvres <b>Nomenclature</b>, un tutoriel dédié te guide pas à pas ; tu pourras le relancer avec le bouton <b>🎓 Tutoriel</b>.",
-    en: "<b>That's it for the site!</b><br>Now pick a tool on the home page. The first time you open <b>Nomenclature</b>, a dedicated tutorial guides you step by step; you can replay it with the <b>🎓 Tutorial</b> button." } },
+    fr: "<b>C'est tout pour le site !</b><br>Choisis maintenant un outil sur la page d'accueil. La première fois que tu ouvres <b>Nomenclature</b>, un tutoriel dédié te guide pas à pas ; tu pourras le relancer avec le bouton <b>🎓 Tutoriel nomenclature</b>.",
+    en: "<b>That's it for the site!</b><br>Now pick a tool on the home page. The first time you open <b>Nomenclature</b>, a dedicated tutorial guides you step by step; you can replay it with the <b>🎓 Nomenclature tutorial</b> button." } },
 ];
 
 const TUTO_TOURS = { site: TUTO_SITE_STEPS, nomenclature: TUTO_NOMENCLATURE_STEPS };
@@ -12459,12 +12458,14 @@ function tutoFrame(){
   card.style.top = ct + 'px';
 }
 
-// The 🎓 button is shown only in the Nomenclature screens.
+// Under the top bar: "🎓 Tutoriel nomenclature" in the Nomenclature screens,
+// "🎓 Tutoriel du site" on the home page; both hidden while a tour runs.
 function tutoRefreshButton(){
-  const btn = tutoEl('tuto-btn');
-  if (!btn) return;
+  const btn = tutoEl('tuto-btn'), siteBtn = tutoEl('tuto-site-btn');
+  if (!btn || !siteBtn) return;
   const onNomenclature = ['list-view', 'project-view', 'packs-view'].some(tutoShown);
   btn.style.display = (!tuto && onNomenclature) ? 'inline-block' : 'none';
+  siteBtn.style.display = (!tuto && tutoShown('home-view')) ? 'inline-block' : 'none';
 }
 
 // First visit of the site: the site tour, on whatever screen is shown. First
@@ -12489,7 +12490,7 @@ function tutoAutoStart(){
 }
 
 document.getElementById('tuto-btn').addEventListener('click', () => tutoStart('nomenclature'));
-document.getElementById('tuto-site-link').addEventListener('click', e => { e.preventDefault(); tutoStart('site'); });
+document.getElementById('tuto-site-btn').addEventListener('click', () => tutoStart('site'));
 setInterval(() => { if (!tuto) tutoRefreshButton(); }, 500);
 
 renderRows();
