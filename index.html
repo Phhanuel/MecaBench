@@ -2272,6 +2272,17 @@ const translations = {
     clTeamViewerCode: 'Code lecteur (consultation seule)',
     clCopy: 'Copier',
     clCopied: 'Copié',
+    clCopyCode: 'Copier le code',
+    clCopyLink: 'Copier le lien',
+    clShare: 'Partager…',
+    clTeamShareHint: 'Envoie le lien d\'invitation à tes coéquipiers : en l\'ouvrant (et après connexion), ils rejoignent l\'équipe en un clic. Le code seul marche aussi, dans « Rejoindre une équipe ».',
+    clTeamShareText: 'Rejoins l\'équipe « {team} » sur MecaBench ({role}) : {url}\nOu saisis le code {code} dans « Rejoindre une équipe ».',
+    clTeamCodeHint: 'colle le code (XXXX-XXXX) ou le lien d\'invitation reçu',
+    clTeamInviteTitle: 'Invitation à une équipe',
+    clTeamInviteLoginMsg: 'Tu as été invité à rejoindre une équipe MecaBench (code {code}). Connecte-toi ou crée un compte pour la rejoindre.',
+    clTeamInviteConfirmMsg: 'Tu as été invité à rejoindre une équipe MecaBench (code {code}). La rejoindre maintenant ?',
+    clTeamJoined: 'Tu as rejoint l\'équipe « {team} » ({role}).',
+    clTeamAlreadyMember: 'Tu fais déjà partie de l\'équipe « {team} » ({role}).',
     clRegenerate: 'Régénérer',
     clRegenerateConfirm: 'Générer un nouveau code ? L\'ancien ne fonctionnera plus (les membres déjà dans l\'équipe restent).',
     clTeamMembers: 'Membres',
@@ -2771,6 +2782,17 @@ const translations = {
     clTeamViewerCode: 'Viewer code (read-only)',
     clCopy: 'Copy',
     clCopied: 'Copied',
+    clCopyCode: 'Copy code',
+    clCopyLink: 'Copy link',
+    clShare: 'Share…',
+    clTeamShareHint: 'Send the invitation link to your teammates: by opening it (and logging in), they join the team in one click. The code alone works too, in "Join a team".',
+    clTeamShareText: 'Join the "{team}" team on MecaBench ({role}): {url}\nOr enter the code {code} in "Join a team".',
+    clTeamCodeHint: 'paste the code (XXXX-XXXX) or the invitation link you received',
+    clTeamInviteTitle: 'Team invitation',
+    clTeamInviteLoginMsg: 'You have been invited to join a MecaBench team (code {code}). Log in or create an account to join it.',
+    clTeamInviteConfirmMsg: 'You have been invited to join a MecaBench team (code {code}). Join it now?',
+    clTeamJoined: 'You joined the "{team}" team ({role}).',
+    clTeamAlreadyMember: 'You are already in the "{team}" team ({role}).',
     clRegenerate: 'Regenerate',
     clRegenerateConfirm: 'Generate a new code? The old one will stop working (current members stay in the team).',
     clTeamMembers: 'Members',
@@ -6763,6 +6785,7 @@ async function handleAuthChange(session, event){
     purgeCloudProjetsFromLocal(false, null);
     setSyncState('idle');
     refreshListIfVisible();
+    if (event === 'INITIAL_SESSION') offerLoginForPendingJoin();
     return;
   }
   if (prevId === newUser.id){ renderAccountButton(); return; } // simple rafraîchissement de jeton
@@ -6776,6 +6799,7 @@ async function handleAuthChange(session, event){
   if (ok) await maybeOfferLocalUpload();
   refreshListIfVisible();
   navRetryPendingLink();
+  processPendingJoin();
 }
 
 // Removes cloud projects from the local cache. `onlyOtherAccounts` keeps the
@@ -7438,14 +7462,103 @@ async function cloudCreateTeam(){
   if (team) openTeamManager(team);
 }
 
-async function cloudJoinTeam(){
-  if (!sb || !cloudUser) return;
-  const code = await promptText(t('clTeamJoinTitle'), t('clTeamCodeLabel'), 'XXXX-XXXX', t('clJoin'));
-  if (!code) return;
+// An invitation link is the site's address with ?join=<code>
+// (https://mecabench.com/?join=ABCD-EFGH). Opening it keeps the code until the
+// visitor is logged in, then offers to join that team.
+const PENDING_JOIN_KEY = 'mecabench_pending_join';
+const PENDING_JOIN_MAX_AGE = 7 * 24 * 3600 * 1000;
+
+function teamInviteUrl(code){
+  const base = /^https?:$/.test(location.protocol) ? location.origin : 'https://mecabench.com';
+  return base + '/?join=' + encodeURIComponent(formatTeamCode(code));
+}
+
+// What was typed or pasted in "Rejoindre une équipe": a code, or a whole invitation link.
+function teamCodeFromInput(text){
+  const m = /[?&]join=([^&#\s]*)/.exec(text || '');
+  if (m){ try { return decodeURIComponent(m[1]); } catch (e){ return m[1]; } }
+  return (text || '').trim();
+}
+
+// Called once at load, before navInit() rewrites the address.
+function captureJoinLink(){
+  const m = /[?&]join=([^&#]*)/.exec(location.search);
+  if (!m) return;
+  let code = '';
+  try { code = decodeURIComponent(m[1]); } catch (e){ code = m[1]; }
+  code = code.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  try {
+    if (code) localStorage.setItem(PENDING_JOIN_KEY, JSON.stringify({ code, at: Date.now() }));
+    const rest = location.search.replace(/[?&]join=[^&#]*/, '').replace(/^&/, '?');
+    history.replaceState(history.state, '', location.pathname + rest + location.hash);
+  } catch (e){}
+}
+
+function pendingJoinCode(){
+  try {
+    const p = JSON.parse(localStorage.getItem(PENDING_JOIN_KEY) || 'null');
+    if (p && p.code && Date.now() - p.at < PENDING_JOIN_MAX_AGE) return p.code;
+  } catch (e){}
+  clearPendingJoin();
+  return null;
+}
+
+function clearPendingJoin(){
+  try { localStorage.removeItem(PENDING_JOIN_KEY); } catch (e){}
+}
+
+// Not logged in with an invitation waiting: invite to log in (the code is
+// kept and offered again once logged in).
+async function offerLoginForPendingJoin(){
+  const code = pendingJoinCode();
+  if (!code || !sb || cloudUser) return;
+  const v = await showChoiceDialog(t('clTeamInviteTitle'), t('clTeamInviteLoginMsg').replace('{code}', formatTeamCode(code)), [
+    { label: t('clLater'), value: 'later' },
+    { label: t('clLoginBtn'), value: 'login', primary: true },
+  ]);
+  if (v === 'login') openAuthModal();
+  else clearPendingJoin();
+}
+
+// Logged in with an invitation waiting: confirm, then join.
+async function processPendingJoin(){
+  const code = pendingJoinCode();
+  if (!code || !sb || !cloudUser) return;
+  clearPendingJoin();
+  const v = await showChoiceDialog(t('clTeamInviteTitle'), t('clTeamInviteConfirmMsg').replace('{code}', formatTeamCode(code)), [
+    { label: t('clLater'), value: 'later' },
+    { label: t('clJoin'), value: 'join', primary: true },
+  ]);
+  if (v === 'join') await joinTeamWithCode(code);
+}
+
+// Joins, then switches to that team's space.
+async function joinTeamWithCode(code){
+  const before = cloudTeams.map(x => x.id);
   const res = await sb.rpc('join_team', { p_code: code });
   if (res.error){ alert(cloudErrorMessage(res.error)); return; }
+  const teamId = res.data && res.data.team_id;
   await cloudPullAll();
   refreshWorkspaceUi();
+  const team = cloudTeams.find(x => x.id === teamId);
+  if (!team) return;
+  chooseWorkspace({ type: 'team', id: team.id });
+  alert(t(before.includes(team.id) ? 'clTeamAlreadyMember' : 'clTeamJoined').replace('{team}', team.name).replace('{role}', roleLabel(team.role)));
+}
+
+async function cloudJoinTeam(){
+  if (!sb || !cloudUser) return;
+  const input = await promptText(t('clTeamJoinTitle'), t('clTeamCodeLabel') + ' (' + t('clTeamCodeHint') + ')', 'XXXX-XXXX', t('clJoin'));
+  const code = teamCodeFromInput(input);
+  if (!code) return;
+  await joinTeamWithCode(code);
+}
+
+// Copies `text`, then shows "Copié" on the button for a moment.
+async function copyWithFeedback(btn, text, fallbackInput){
+  const label = btn.textContent;
+  try { await navigator.clipboard.writeText(text); btn.textContent = t('clCopied'); setTimeout(() => { btn.textContent = label; }, 1200); }
+  catch (e){ if (fallbackInput) fallbackInput.select(); }
 }
 
 async function openTeamManager(team){
@@ -7467,18 +7580,28 @@ async function openTeamManager(team){
     if (isOwner){
       const codesRes = await sb.from('team_codes').select('editor_code, viewer_code').eq('team_id', team.id).maybeSingle();
       const codes = (codesRes && codesRes.data) || null;
+      body.appendChild(modalMessage(t('clTeamShareHint'), 'var(--muted)'));
       [['editor', 'clTeamEditorCode'], ['viewer', 'clTeamViewerCode']].forEach(([kind, labelKey]) => {
         const code = codes ? codes[kind + '_code'] : '';
         const f = modalField(t(labelKey), 'text', { value: formatTeamCode(code), readOnly: true });
         f.input.style.fontFamily = 'monospace';
         f.input.style.letterSpacing = '0.08em';
+        f.input.addEventListener('focus', () => f.input.select());
         const r = document.createElement('div');
         r.className = 'row-actions';
-        r.style.cssText = 'margin:-6px 0 14px;';
-        const copy = modalButton(t('clCopy'), { onClick: async () => {
-          try { await navigator.clipboard.writeText(formatTeamCode(code)); copy.textContent = t('clCopied'); setTimeout(() => { copy.textContent = t('clCopy'); }, 1200); }
-          catch (e){ f.input.select(); }
-        } });
+        r.style.cssText = 'margin:-6px 0 14px; flex-wrap:wrap;';
+        const url = teamInviteUrl(code);
+        const copyLink = modalButton(t('clCopyLink'), { primary: true, onClick: () => copyWithFeedback(copyLink, url, f.input) });
+        const copy = modalButton(t('clCopyCode'), { onClick: () => copyWithFeedback(copy, formatTeamCode(code), f.input) });
+        r.appendChild(copyLink);
+        // phones: the system share sheet (SMS, WhatsApp, Teams, e-mail…)
+        if (navigator.share){
+          const shareText = t('clTeamShareText').replace('{team}', team.name).replace('{role}', roleLabel(kind).toLowerCase())
+            .replace('{url}', url).replace('{code}', formatTeamCode(code));
+          r.appendChild(modalButton(t('clShare'), { onClick: async () => {
+            try { await navigator.share({ title: 'MecaBench', text: shareText }); } catch (e){ /* cancelled */ }
+          } }));
+        }
         const regen = modalButton(t('clRegenerate'), { onClick: async () => {
           const ok = await showConfirmModal(t('clRegenerateConfirm'));
           if (!ok) return;
@@ -12298,8 +12421,8 @@ const TUTO_SITE_STEPS = [
     fr: "<b>Liaison avec Claude</b> : une fois connecté, clique sur ton adresse e-mail (ce même bouton), puis sur <b>Accès API (Claude)…</b>. Tu y crées un jeton qui relie MecaBench à Claude : Claude peut alors lire et remplir tes projets (ajouter des pièces, créer des packs...) depuis une conversation, et les changements apparaissent ici en direct. Un jeton se révoque à tout moment.",
     en: "<b>Link with Claude</b>: once logged in, click your e-mail address (this same button), then <b>API access (Claude)…</b>. There you create a token that links MecaBench to Claude: Claude can then read and fill your projects (add parts, build packs...) from a conversation, and the changes show up here live. A token can be revoked at any time." } },
   { target: tutoAccountOrWorkspaceBtn, optional: true, text: {
-    fr: "<b>Équipes</b> : pour travailler à plusieurs, connecte-toi puis choisis <b>Créer une équipe</b> (dans l'écran <b>Comment veux-tu travailler ?</b> ou dans la liste des projets Nomenclature). Tu reçois un <b>code d'invitation</b> à donner à tes coéquipiers : ils le saisissent dans <b>Rejoindre une équipe</b>. Les projets de l'équipe sont partagés et se mettent à jour en direct pour tout le monde.",
-    en: "<b>Teams</b>: to work together, log in then pick <b>Create a team</b> (on the <b>How do you want to work?</b> screen or in the Nomenclature project list). You get an <b>invitation code</b> to give your teammates: they enter it in <b>Join a team</b>. The team's projects are shared and update live for everyone." } },
+    fr: "<b>Équipes</b> : pour travailler à plusieurs, connecte-toi puis choisis <b>Créer une équipe</b> (dans l'écran <b>Comment veux-tu travailler ?</b> ou dans la liste des projets Nomenclature). Dans <b>Gérer</b>, le bouton <b>Copier le lien</b> te donne un <b>lien d'invitation</b> à envoyer à tes coéquipiers : en l'ouvrant, ils rejoignent l'équipe en un clic (après connexion). Ils peuvent aussi saisir le <b>code</b> dans <b>Rejoindre une équipe</b>. Les projets de l'équipe sont partagés et se mettent à jour en direct pour tout le monde.",
+    en: "<b>Teams</b>: to work together, log in then pick <b>Create a team</b> (on the <b>How do you want to work?</b> screen or in the Nomenclature project list). In <b>Manage</b>, the <b>Copy link</b> button gives you an <b>invitation link</b> to send your teammates: by opening it, they join the team in one click (after logging in). They can also enter the <b>code</b> in <b>Join a team</b>. The team's projects are shared and update live for everyone." } },
   { target: tutoAccountOrWorkspaceBtn, optional: true, text: {
     fr: "<b>Seul ou en équipe</b> : une fois connecté, tu choisis ton espace de travail : <b>👤 Seul</b> pour tes projets perso, visibles par toi seul, ou <b>👥 une équipe</b> pour ses projets partagés. Le bouton d'espace, en haut à droite, te permet d'en changer à tout moment.",
     en: "<b>Solo or team</b>: once logged in, you pick your workspace: <b>👤 Solo</b> for your personal projects, visible only to you, or <b>👥 a team</b> for its shared projects. The space button at the top right lets you switch at any time." } },
@@ -12567,6 +12690,7 @@ setInterval(() => { if (!tuto) tutoRefreshButton(); }, 500);
 renderRows();
 update();
 applyLanguage('fr');
+captureJoinLink();
 navInit();
 initCloud();
 tutoAutoStart();
