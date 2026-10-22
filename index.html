@@ -143,6 +143,60 @@
     z-index:2000;
     transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease;
   }
+  #tuto-layer{
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:2100;
+    pointer-events:none;
+  }
+  .tuto-block{
+    position:fixed;
+    background:rgba(0,0,0,0.68);
+    pointer-events:auto;
+  }
+  #tuto-ring{
+    position:fixed;
+    border:2px solid var(--accent);
+    border-radius:8px;
+    box-shadow:0 0 0 3px rgba(255,255,255,0.15), 0 0 18px rgba(0,0,0,0.5);
+    pointer-events:none;
+  }
+  #tuto-card{
+    position:fixed;
+    margin:0;
+    pointer-events:auto;
+    box-shadow:0 10px 28px rgba(0,0,0,0.45);
+    font-size:13px;
+    line-height:1.5;
+    color:var(--ink);
+  }
+  #tuto-hint{
+    display:none;
+    margin:10px 0 0;
+    font-size:12px;
+    color:#d9931a;
+  }
+  #tuto-actions{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-top:14px;
+    flex-wrap:wrap;
+  }
+  #tuto-actions .btn{
+    padding:6px 10px;
+    font-size:12px;
+  }
+  #tuto-progress{
+    font-size:11px;
+    color:var(--muted);
+    margin-right:auto;
+  }
+  #tuto-next:disabled{
+    opacity:0.45;
+    cursor:not-allowed;
+  }
   #tour-tooltip{
     position:fixed;
     z-index:2001;
@@ -741,6 +795,7 @@
   <button class="theme-toggle" id="back-prev-btn" type="button" style="position:static; display:none;" data-i18n="backPrevBtn">← Retour</button>
   <button class="theme-toggle" id="exit-produit-btn" type="button" style="position:static; display:none;" data-i18n="exitProduitBtn">← Base de données</button>
   <button class="theme-toggle" id="back-to-home-btn" type="button" style="position:static; display:none;" data-i18n="homeBtn">Accueil</button>
+  <button class="theme-toggle" id="tuto-btn" type="button" style="position:static; display:none;" data-i18n="tutoBtn">🎓 Tutoriel</button>
   <div style="display:flex; border:1px solid var(--line); border-radius:20px; overflow:hidden; background:var(--panel); box-shadow:0 2px 6px rgba(0,0,0,0.08);">
     <button class="lang-btn active" id="lang-btn-fr" type="button">FR</button>
     <button class="lang-btn" id="lang-btn-en" type="button">EN</button>
@@ -1003,8 +1058,8 @@
 
       <div id="projet-recherche-tab" style="display:none;">
         <div class="panel">
-          <h2 data-i18n="projetSearchDetailTitle">Où est utilisé un produit ? (tous les produits du projet)</h2>
-          <p class="note" style="margin-top:0;" data-i18n="projetSearchDetailNote">Choisis un produit pour voir dans quels produits et packs de ce projet il est présent, et en quelle quantité.</p>
+          <h2 data-i18n="projetSearchDetailTitle">Où est utilisé un produit ? (toutes les gammes du projet)</h2>
+          <p class="note" style="margin-top:0;" data-i18n="projetSearchDetailNote">Choisis un produit pour voir dans quelles gammes et quels packs de ce projet il est présent, et en quelle quantité.</p>
           <div class="params" style="grid-template-columns:1fr; margin-bottom:14px; max-width:500px;">
             <div>
               <label for="projet-search-product-select" data-i18n="searchProductLabel">Choisir un produit</label>
@@ -1022,7 +1077,7 @@
             <table id="projet-search-usage-table">
               <thead>
                 <tr>
-                  <th data-i18n="produitsSectionTitle">Produit</th>
+                  <th data-i18n="gammeColLabel">Gamme</th>
                   <th data-i18n="searchColPack">Pack</th>
                   <th data-i18n="dbColReference">Référence</th>
                   <th data-i18n="packColQuantity">Quantité</th>
@@ -1034,7 +1089,7 @@
           <p class="note" id="projet-search-no-usage" style="display:none;" data-i18n="searchNoUsage">Ce produit n'est utilisé dans aucun pack pour l'instant.</p>
 
           <h2 style="margin-top:26px;" data-i18n="searchPackContentsTitle">Contenu complet d'un pack</h2>
-          <p class="note" style="margin-top:0;" data-i18n="projetSearchPackContentsNote">Choisis un pack, dans n'importe quel produit de ce projet, pour voir la liste complète de ce qu'il contient — doublons additionnés, y compris via des sous-packs imbriqués.</p>
+          <p class="note" style="margin-top:0;" data-i18n="projetSearchPackContentsNote">Choisis un pack, dans n'importe quelle gamme de ce projet, pour voir la liste complète de ce qu'il contient — doublons additionnés, y compris via des sous-packs imbriqués.</p>
           <div class="params" style="grid-template-columns:1fr; margin-bottom:14px; max-width:500px;">
             <div>
               <label for="projet-search-pack-contents-select" data-i18n="searchPackContentsLabel">Choisir un pack</label>
@@ -1057,13 +1112,13 @@
           <p class="note" id="projet-search-pack-contents-empty" style="display:none;" data-i18n="searchPackContentsEmpty">Ce pack ne contient aucun produit pour l'instant.</p>
 
           <h2 style="margin-top:26px;" data-i18n="projetSearchSummaryTitle">Résumé de tous les produits du projet</h2>
-          <p class="note" style="margin-top:0;" data-i18n="projetSearchSummaryNote">Pour chaque produit de la base de données : dans combien de produits (au sens Projet) et de packs il est utilisé, et la quantité totale nécessaire en cumulant tout le projet.</p>
+          <p class="note" style="margin-top:0;" data-i18n="projetSearchSummaryNote">Pour chaque produit de la base de données : dans combien de gammes et de packs il est utilisé, et la quantité totale nécessaire en cumulant tout le projet.</p>
           <table id="projet-search-summary-table">
             <thead>
               <tr>
                 <th data-i18n="dbColReference">Référence</th>
                 <th data-i18n="dbColNom">Nom</th>
-                <th data-i18n="projetSearchColProduitCount">Nb de produits</th>
+                <th data-i18n="projetSearchColProduitCount">Nb de gammes</th>
                 <th data-i18n="searchColPackCount">Nb de packs</th>
                 <th data-i18n="searchTotalQtyLabel">Quantité totale</th>
               </tr>
@@ -1075,8 +1130,8 @@
     </div>
 
     <div class="panel">
-      <h2 data-i18n="produitsSectionTitle">Produits</h2>
-      <p class="note" style="margin-top:0;" data-i18n="produitsNote">Chaque produit a ses propres packs, sa recherche et sa note — mais partage la même base de données et les mêmes produits bruts que les autres produits de ce projet.</p>
+      <h2 data-i18n="produitsSectionTitle">Gammes</h2>
+      <p class="note" style="margin-top:0;" data-i18n="produitsNote">Chaque gamme a ses propres packs, sa recherche et sa note — mais partage la même base de données et les mêmes produits bruts que les autres gammes de ce projet.</p>
       <div id="produit-tile-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:14px;"></div>
     </div>
   </div>
@@ -1088,8 +1143,8 @@
 
 <div class="params" style="grid-template-columns:1fr; margin-bottom:10px; max-width:500px;">
   <div>
-    <label for="project-title" data-i18n="projectTitleLabel">Titre de l'ensemble</label>
-    <input type="text" id="project-title" data-i18n-placeholder="projectTitlePlaceholder" placeholder="ex. Escalier atelier — nomenclature">
+    <label for="project-title" data-i18n="gammeTitleLabel">Titre de la gamme</label>
+    <input type="text" id="project-title" data-i18n-placeholder="gammeTitlePlaceholder" placeholder="ex. Kit fixation murale">
   </div>
 </div>
 <div class="row-actions" style="margin-bottom:20px;">
@@ -2076,6 +2131,13 @@ const translations = {
     tourPrev: 'Précédent',
     tourSkip: 'Fermer',
     tourFinish: 'Terminer',
+    tutoBtn: '🎓 Tutoriel',
+    tutoQuit: 'Quitter le tutoriel',
+    tutoLater: 'Plus tard',
+    tutoStartBtn: 'Commencer',
+    tutoSkipStep: 'Passer l\'étape',
+    tutoOffscreen: 'L\'élément de cette étape n\'est pas affiché : reviens sur le bon écran, ou utilise Précédent.',
+    tutoNeedAction: 'Fais ce qui est demandé pour pouvoir continuer.',
     tourArbreStep1: 'Chaque ligne du tableau est un bloc : édite son nombre, sa référence et son nom directement ici.',
     tourArbreStep2: 'Le champ Parent construit la hiérarchie — laisse-le vide pour une racine, ou indique l\'id d\'un autre bloc pour en faire un enfant.',
     tourArbreStep3: 'Fais glisser cette poignée pour réordonner une ligne parmi ses frères et sœurs.',
@@ -2358,18 +2420,21 @@ const translations = {
     newSharedProjetTitle: 'Nouveau projet partagé',
     projetTitleLabel: 'Titre du projet',
     projetTitlePlaceholder: 'ex. Escaliers atelier',
-    produitsSectionTitle: 'Produits',
-    produitsNote: 'Chaque produit a ses propres packs, sa recherche et sa note — mais partage la même base de données et les mêmes produits bruts que les autres produits de ce projet.',
-    newProduitTitle: 'Nouveau produit',
-    untitledProduit: 'Produit sans titre',
-    confirmDeleteProduit: 'Supprimer ce produit ? Cette action est irréversible.',
-    produitsCountSuffix: 'produit(s)',
-    projetSearchDetailTitle: 'Où est utilisé un produit ? (tous les produits du projet)',
-    projetSearchDetailNote: "Choisis un produit pour voir dans quels produits et packs de ce projet il est présent, et en quelle quantité.",
+    produitsSectionTitle: 'Gammes',
+    produitsNote: 'Chaque gamme a ses propres packs, sa recherche et sa note — mais partage la même base de données et les mêmes produits bruts que les autres gammes de ce projet.',
+    newProduitTitle: 'Nouvelle gamme',
+    untitledProduit: 'Gamme sans titre',
+    confirmDeleteProduit: 'Supprimer cette gamme ? Cette action est irréversible.',
+    produitsCountSuffix: 'gamme(s)',
+    gammeColLabel: 'Gamme',
+    gammeTitleLabel: 'Titre de la gamme',
+    gammeTitlePlaceholder: 'ex. Kit fixation murale',
+    projetSearchDetailTitle: 'Où est utilisé un produit ? (toutes les gammes du projet)',
+    projetSearchDetailNote: "Choisis un produit pour voir dans quelles gammes et quels packs de ce projet il est présent, et en quelle quantité.",
     projetSearchSummaryTitle: 'Résumé de tous les produits du projet',
-    projetSearchSummaryNote: 'Pour chaque produit de la base de données : dans combien de produits (au sens Projet) et de packs il est utilisé, et la quantité totale nécessaire en cumulant tout le projet.',
-    projetSearchColProduitCount: 'Nb de produits',
-    projetSearchPackContentsNote: "Choisis un pack, dans n'importe quel produit de ce projet, pour voir la liste complète de ce qu'il contient — doublons additionnés, y compris via des sous-packs imbriqués.",
+    projetSearchSummaryNote: 'Pour chaque produit de la base de données : dans combien de gammes et de packs il est utilisé, et la quantité totale nécessaire en cumulant tout le projet.',
+    projetSearchColProduitCount: 'Nb de gammes',
+    projetSearchPackContentsNote: "Choisis un pack, dans n'importe quelle gamme de ce projet, pour voir la liste complète de ce qu'il contient — doublons additionnés, y compris via des sous-packs imbriqués.",
   },
   en: {
     title: 'Parts List',
@@ -2562,6 +2627,13 @@ const translations = {
     tourPrev: 'Previous',
     tourSkip: 'Close',
     tourFinish: 'Finish',
+    tutoBtn: '🎓 Tutorial',
+    tutoQuit: 'Quit the tutorial',
+    tutoLater: 'Later',
+    tutoStartBtn: 'Start',
+    tutoSkipStep: 'Skip this step',
+    tutoOffscreen: 'This step\'s element is not on screen: go back to the right screen, or use Previous.',
+    tutoNeedAction: 'Do what is asked to continue.',
     tourArbreStep1: 'Each table row is a block: edit its quantity, reference and name right here.',
     tourArbreStep2: 'The Parent field builds the hierarchy — leave it empty for a root, or enter another block\'s id to make this a child of it.',
     tourArbreStep3: 'Drag this handle to reorder a row among its siblings.',
@@ -2844,18 +2916,21 @@ const translations = {
     newSharedProjetTitle: 'New shared project',
     projetTitleLabel: 'Project title',
     projetTitlePlaceholder: 'e.g. Workshop staircases',
-    produitsSectionTitle: 'Products',
-    produitsNote: 'Each product has its own packs, search and note — but shares the same database and the same raw parts as the other products in this project.',
-    newProduitTitle: 'New product',
-    untitledProduit: 'Untitled product',
-    confirmDeleteProduit: 'Delete this product? This action cannot be undone.',
-    produitsCountSuffix: 'product(s)',
-    projetSearchDetailTitle: 'Where is a product used? (all products in this project)',
-    projetSearchDetailNote: 'Choose a product to see in which products and packs of this project it is used, and in what quantity.',
+    produitsSectionTitle: 'Ranges',
+    produitsNote: 'Each range has its own packs, search and note — but shares the same database and the same raw parts as the other ranges in this project.',
+    newProduitTitle: 'New range',
+    untitledProduit: 'Untitled range',
+    confirmDeleteProduit: 'Delete this range? This action cannot be undone.',
+    produitsCountSuffix: 'range(s)',
+    gammeColLabel: 'Range',
+    gammeTitleLabel: 'Range title',
+    gammeTitlePlaceholder: 'e.g. Wall mounting kit',
+    projetSearchDetailTitle: 'Where is a product used? (all ranges in this project)',
+    projetSearchDetailNote: 'Choose a product to see in which ranges and packs of this project it is used, and in what quantity.',
     projetSearchSummaryTitle: 'Summary of all products in this project',
-    projetSearchSummaryNote: 'For each database product: how many products (in the Projet sense) and packs use it, and the total quantity needed across the whole project.',
-    projetSearchColProduitCount: 'Nb of products',
-    projetSearchPackContentsNote: "Choose a pack, in any product of this project, to see the full list of what it contains — duplicates summed, including via nested sub-packs.",
+    projetSearchSummaryNote: 'For each database product: how many ranges and packs use it, and the total quantity needed across the whole project.',
+    projetSearchColProduitCount: 'Nb of ranges',
+    projetSearchPackContentsNote: "Choose a pack, in any range of this project, to see the full list of what it contains — duplicates summed, including via nested sub-packs.",
   },
 };
 
@@ -12005,11 +12080,367 @@ window.addEventListener('beforeunload', e => {
   }
 });
 
+// =============================================================================
+// NOMENCLATURE TUTORIAL
+// Interactive walkthrough of the Nomenclature tool: the page is dimmed except
+// for the element the current step is about, and the user does the real
+// actions (create a project, fill the database, build a range with a sachet,
+// a pack and a special pack...). Steps with advance() move on by themselves
+// once the action is done; steps with ready() wait for "Suivant", which stays
+// disabled until the condition holds. Launched on the first visit (flag in
+// localStorage), quittable at any time, relaunched with the 🎓 button.
+// =============================================================================
+const TUTO_SEEN_KEY = 'mecabench_tuto_nomenclature_seen';
+const TUTO_MODAL_OVERLAYS = ['confirm-modal-overlay', 'unsaved-modal-overlay', 'pack-modal-overlay', 'db-group-modal-overlay', 'brut-ignored-modal-overlay', 'notes-table-modal-overlay', 'full-pdf-modal-overlay'];
+
+let tuto = null; // { index, scrolledFor, textLang, textIndex, searched }
+
+function tutoEl(id){ return document.getElementById(id); }
+function tutoShown(id){ const el = tutoEl(id); return !!el && el.style.display !== 'none' && el.getClientRects().length > 0; }
+function tutoParent(id){ const el = tutoEl(id); return el ? el.parentElement : null; }
+function tutoFilled(v){ return v !== null && v !== undefined && String(v).trim() !== ''; }
+function tutoDbComplete(){ return db.filter(e => ['reference', 'nom', 'categorie', 'matiere', 'pm', 'va'].every(k => tutoFilled(e[k]))).length; }
+function tutoFocusOpen(){ return tutoShown('packs-view') && tutoShown('pack-focus-section'); }
+function tutoGridOpen(){ return tutoShown('packs-view') && tutoShown('packs-management-tab') && tutoShown('packs-grid-section'); }
+function tutoPackModalOpen(){ return tutoEl('pack-modal-overlay').style.display === 'flex'; }
+function tutoPackModalPanel(){ return tutoEl('pack-modal-overlay').querySelector('.panel'); }
+function tutoChildren(p){ return rows.filter(r => r.parent.trim() === p.id.trim()); }
+function tutoTopPacks(){ return rows.filter(r => r.parent.trim() === ''); }
+function tutoIsSachetId(id){ return tutoTopPacks().some(r => r.id.trim() === String(id).trim() && r.isSachet); }
+function tutoSachetDone(){ return tutoTopPacks().some(p => p.isSachet && tutoChildren(p).some(c => c.dbId)); }
+function tutoPackDone(){ return tutoTopPacks().some(p => !p.special && !p.isSachet && tutoChildren(p).some(c => c.dbId) && tutoChildren(p).some(c => c.packRefId && tutoIsSachetId(c.packRefId))); }
+function tutoSpecialDone(){ return tutoTopPacks().some(p => p.special && tutoChildren(p).some(c => c.packRefId)); }
+function tutoFocusOn(kind){
+  if (!tutoFocusOpen() || !selectedPackRow) return false;
+  if (kind === 'sachet') return !!selectedPackRow.isSachet;
+  if (kind === 'special') return !!selectedPackRow.special;
+  return !selectedPackRow.isSachet && !selectedPackRow.special;
+}
+function tutoAddArea(){
+  const a = tutoParent('pack-component-search');
+  const b = tutoParent('pack-add-component-select');
+  return tutoFocusOpen() && a && b ? [a, b] : null;
+}
+
+// The three "create a pack" sequences (sachet, normal pack, special pack)
+// share the same four steps: "+" tile, name/reference modal, add the
+// content, back to the pack list. A sequence is skipped once its pack exists.
+function tutoPackSteps(kind, tileSelector, isDone, texts){
+  const skip = () => isDone() && !tutoFocusOpen();
+  return [
+    { text: texts.tile, target: () => tutoGridOpen() ? document.querySelector(tileSelector) : null, skip,
+      advance: () => tutoPackModalOpen() || tutoFocusOn(kind) },
+    { text: texts.modal, target: () => tutoPackModalOpen() ? tutoPackModalPanel() : null, skip,
+      advance: () => tutoFocusOn(kind),
+      back: () => !tutoPackModalOpen() && !tutoFocusOn(kind) },
+    { text: texts.add, target: tutoAddArea, skip,
+      advance: () => tutoFocusOn(kind) && isDone() },
+    { text: texts.back, target: () => tutoFocusOpen() ? tutoEl('pack-focus-back-btn') : null,
+      skip: () => !tutoFocusOpen(),
+      advance: () => !tutoFocusOpen() },
+  ];
+}
+
+const TUTO_STEPS = [
+  { center: true, start: true, text: {
+    fr: "<b>Bienvenue dans MecaBench !</b><br>Ce tutoriel te guide pas à pas dans l'outil <b>Nomenclature</b> : tu vas créer un projet, remplir sa base de données, puis construire une gamme avec un sachet, un pack et un pack spécial.<br><br>Tu peux le quitter à tout moment et le relancer plus tard avec le bouton <b>🎓 Tutoriel</b> en haut à droite.",
+    en: "<b>Welcome to MecaBench!</b><br>This tutorial walks you through the <b>Nomenclature</b> tool: you will create a project, fill its database, then build a range with a sachet, a pack and a special pack.<br><br>You can quit at any time and replay it later with the <b>🎓 Tutorial</b> button at the top right." } },
+  { target: () => tutoEl('go-to-app-btn'),
+    advance: () => tutoShown('list-view') || tutoShown('project-view') || tutoShown('packs-view'),
+    text: { fr: "Ouvre l'outil <b>Nomenclature</b>.", en: "Open the <b>Nomenclature</b> tool." } },
+  { target: () => tutoShown('list-view') ? document.querySelector('#list-view-grid-perso .list-tile-new') : null,
+    advance: () => tutoShown('project-view') || tutoShown('packs-view'),
+    text: { fr: "Crée un nouveau projet : clique sur <b>+</b>.", en: "Create a new project: click <b>+</b>." } },
+  { target: () => tutoShown('project-view') ? tutoParent('projet-title-input') : null,
+    ready: () => tutoFilled(tutoEl('projet-title-input').value),
+    text: { fr: "Donne un titre au projet, par exemple <b>Tuto — Fixation murale</b>, puis clique sur <b>Suivant</b>.", en: "Give the project a title, for example <b>Tutorial — Wall mounting</b>, then click <b>Next</b>." } },
+  { target: () => tutoShown('projet-db-tab') ? tutoEl('db-add-row') : null,
+    advance: () => db.length >= 2,
+    text: { fr: "Voici la <b>base de données</b> du projet : elle liste toutes les pièces disponibles. Clique <b>deux fois</b> sur <b>+ Ajouter un produit</b> pour créer deux lignes.", en: "This is the project's <b>database</b>: it lists every available part. Click <b>+ Add a product</b> <b>twice</b> to create two rows." } },
+  { target: () => tutoShown('projet-db-tab') ? tutoEl('db-table') : null,
+    ready: () => tutoDbComplete() >= 1,
+    text: { fr: "Remplis une ligne avec <b>une vis</b>, un champ après l'autre :<br>Référence <b>VIS-M6-20</b> · Nom <b>Vis CHC M6x20</b> · Catégorie <b>Visserie</b> · Matière <b>Acier inox A2</b> · PM (prix matière) <b>0.05</b> · VA (valeur ajoutée) <b>0.10</b>.<br>Le <b>prix</b> se calcule tout seul (PM + VA).", en: "Fill one row with <b>a screw</b>, one field after another:<br>Reference <b>VIS-M6-20</b> · Name <b>M6x20 socket screw</b> · Category <b>Fasteners</b> · Material <b>A2 stainless steel</b> · MP (material price) <b>0.05</b> · AV (added value) <b>0.10</b>.<br>The <b>price</b> is computed for you (MP + AV)." } },
+  { target: () => tutoShown('projet-db-tab') ? tutoEl('db-table') : null,
+    ready: () => tutoDbComplete() >= 2,
+    text: { fr: "Remplis l'autre ligne avec <b>un support de fixation</b> (la base se trie toute seule par référence) :<br>Référence <b>SUP-FIX-01</b> · Nom <b>Support de fixation</b> · Catégorie <b>Tôlerie</b> · Matière <b>Acier S235</b> · PM <b>2.40</b> · VA <b>3.60</b>.<br>Coche aussi la case <b>Temp.</b> : elle signale un prix provisoire (affiché en orange).", en: "Fill the other row with <b>a mounting bracket</b> (the database sorts itself by reference):<br>Reference <b>SUP-FIX-01</b> · Name <b>Mounting bracket</b> · Category <b>Sheet metal</b> · Material <b>S235 steel</b> · MP <b>2.40</b> · AV <b>3.60</b>.<br>Also tick <b>Temp.</b>: it flags a provisional price (shown in orange)." } },
+  { target: () => tutoShown('projet-db-tab') ? tutoParent('db-search-ref') : null,
+    ready: () => !!(tuto && tuto.searched),
+    text: { fr: "Voici l'<b>outil de recherche</b> : chaque champ filtre une colonne. Tape <b>VIS</b> dans <b>Référence</b> pour ne garder que la vis, puis vide le champ pour retrouver toute la base.", en: "This is the <b>search tool</b>: each field filters one column. Type <b>VIS</b> in <b>Reference</b> to keep only the screw, then clear the field to see the whole database again." } },
+  { target: () => tutoShown('project-view') ? tutoEl('save-projet-btn') : null,
+    advance: () => tutoShown('project-view') && !hasUnsavedProjetChanges(),
+    text: { fr: "Clique sur <b>Enregistrer</b> pour sauvegarder le projet et sa base de données.", en: "Click <b>Save</b> to store the project and its database." } },
+  { target: () => tutoShown('project-view') ? tutoEl('tab-btn-projet-brut') : null,
+    advance: () => tutoShown('projet-brut-tab'),
+    text: { fr: "Ouvre l'onglet <b>Brut</b>.", en: "Open the <b>Raw</b> tab." } },
+  { target: () => tutoShown('projet-brut-tab') ? tutoEl('projet-brut-tab') : null, tall: true,
+    text: { fr: "<b>Onglet Brut</b> : un produit brut est une pièce avant usinage ou modification (une barre, une tôle...).<br>Ajoute-les en haut, puis glisse les pièces de <b>Pièces disponibles</b> sous le brut dont elles sont issues. Le bouton <b>À ignorer</b> sert à écarter une pièce qui n'a pas de brut. Cet onglet ne change ni les prix ni les calculs.", en: "<b>Raw tab</b>: a raw part is a part before machining or modification (a bar, a sheet...).<br>Add them at the top, then drag parts from <b>Available parts</b> under the raw part they come from. <b>To ignore</b> sets aside a part that has no raw part. This tab changes neither prices nor totals." } },
+  { target: () => tutoShown('project-view') ? tutoEl('tab-btn-projet-recherche') : null,
+    advance: () => tutoShown('projet-recherche-tab'),
+    text: { fr: "Ouvre l'onglet <b>Recherche</b>.", en: "Open the <b>Search</b> tab." } },
+  { target: () => tutoShown('projet-recherche-tab') ? tutoEl('projet-recherche-tab') : null, tall: true,
+    text: { fr: "<b>Onglet Recherche du projet</b> : il regarde <b>toutes les gammes</b> du projet.<br>• <b>Où est utilisé un produit ?</b> : dans quelles gammes et quels packs, et en quelle quantité.<br>• <b>Contenu complet d'un pack</b> : tout ce qu'il contient, sous-packs compris.<br>• <b>Résumé</b> : la quantité totale de chaque pièce.<br>Il se remplira dès que tu auras créé une gamme.", en: "<b>Project search tab</b>: it looks at <b>every range</b> of the project.<br>• <b>Where is a product used?</b>: in which ranges and packs, and how many.<br>• <b>Full contents of a pack</b>: everything inside, sub-packs included.<br>• <b>Summary</b>: the total quantity of each part.<br>It fills up once you have created a range." } },
+  { target: () => tutoShown('project-view') ? document.querySelector('#produit-tile-grid .list-tile-new') : null,
+    advance: () => tutoShown('packs-view'),
+    text: { fr: "Crée maintenant une <b>gamme</b> : clique sur <b>+</b> dans <b>Gammes</b>. Une gamme regroupe des packs construits avec les pièces de la base.", en: "Now create a <b>range</b>: click <b>+</b> under <b>Ranges</b>. A range groups packs built from the database parts." } },
+  { target: () => tutoShown('packs-view') ? tutoParent('project-title') : null,
+    ready: () => tutoFilled(tutoEl('project-title').value),
+    text: { fr: "Donne un titre à la gamme, par exemple <b>Kit fixation murale</b>, puis clique sur <b>Suivant</b>.", en: "Give the range a title, for example <b>Wall mounting kit</b>, then click <b>Next</b>." } },
+  ...tutoPackSteps('sachet', '#sachet-tile-grid .list-tile-new', tutoSachetDone, {
+    tile: { fr: "Commence par un <b>sachet</b> : clique sur <b>+</b> dans <b>Sachets</b>. Un sachet a son propre prix, mais ses pièces ne comptent dans la recherche que s'il est placé dans un pack.", en: "Start with a <b>sachet</b>: click <b>+</b> under <b>Sachets</b>. A sachet has its own price, but its parts only count in the search once it is placed in a pack." },
+    modal: { fr: "Nom <b>Sachet de vis</b>, référence <b>SACH-VIS</b>, puis <b>Créer</b>.", en: "Name <b>Screw sachet</b>, reference <b>SACH-VIS</b>, then <b>Create</b>." },
+    add: { fr: "Ajoute <b>la vis</b> dans le sachet : choisis-la dans la liste (le champ au-dessus filtre par référence), mets la quantité <b>4</b> puis clique sur <b>Ajouter</b>. L'aperçu à droite se met à jour.", en: "Add <b>the screw</b> to the sachet: pick it in the list (the field above filters by reference), set the quantity to <b>4</b> and click <b>Add</b>. The preview on the right updates." },
+    back: { fr: "Le sachet est prêt. Clique sur <b>← Retour aux packs</b>.", en: "The sachet is ready. Click <b>← Back to packs</b>." },
+  }),
+  ...tutoPackSteps('pack', '#pack-tile-grid .list-tile-new', tutoPackDone, {
+    tile: { fr: "Crée un <b>pack</b> normal : clique sur <b>+</b> dans <b>Packs</b>.", en: "Create a regular <b>pack</b>: click <b>+</b> under <b>Packs</b>." },
+    modal: { fr: "Nom <b>Pack support</b>, référence <b>PACK-SUP</b>, puis <b>Créer</b>.", en: "Name <b>Bracket pack</b>, reference <b>PACK-SUP</b>, then <b>Create</b>." },
+    add: { fr: "Ajoute <b>le support de fixation</b> (quantité 1), puis <b>le sachet de vis</b> : il apparaît dans la liste sous <b>Packs</b>. Un pack peut contenir des pièces et d'autres packs.", en: "Add <b>the mounting bracket</b> (quantity 1), then <b>the screw sachet</b>: it is listed under <b>Packs</b>. A pack can hold parts and other packs." },
+    back: { fr: "Le pack est prêt. Clique sur <b>← Retour aux packs</b>.", en: "The pack is ready. Click <b>← Back to packs</b>." },
+  }),
+  ...tutoPackSteps('special', '#special-pack-row .list-tile-new', tutoSpecialDone, {
+    tile: { fr: "Dernier pack : un <b>pack spécial</b>, celui du haut de l'arbre. Clique sur <b>+</b> dans <b>Pack spécial</b>.", en: "Last pack: a <b>special pack</b>, the top of the tree. Click <b>+</b> under <b>Special pack</b>." },
+    modal: { fr: "Nom <b>Ensemble fixation</b>, référence <b>ENS-FIX</b>, puis <b>Créer</b>.", en: "Name <b>Mounting assembly</b>, reference <b>ENS-FIX</b>, then <b>Create</b>." },
+    add: { fr: "Ajoute <b>le pack support</b> dans le pack spécial. L'aperçu montre maintenant tout l'arbre : pack spécial → pack → sachet → vis.", en: "Add <b>the bracket pack</b> to the special pack. The preview now shows the whole tree: special pack → pack → sachet → screw." },
+    back: { fr: "Clique sur <b>← Retour aux packs</b> pour voir ta gamme complète.", en: "Click <b>← Back to packs</b> to see your complete range." },
+  }),
+  { target: () => tutoShown('packs-view') ? tutoEl('save-project-btn') : null,
+    advance: () => tutoShown('packs-view') && !!currentProduitId && !hasUnsavedChanges(),
+    text: { fr: "Clique sur <b>Enregistrer</b> pour sauvegarder la gamme.", en: "Click <b>Save</b> to store the range." } },
+  { target: () => tutoShown('packs-view') ? tutoEl('tab-btn-search') : null,
+    advance: () => tutoShown('search-tab'),
+    text: { fr: "Ouvre l'onglet <b>Recherche</b> de la gamme.", en: "Open the range's <b>Search</b> tab." } },
+  { target: () => tutoShown('search-tab') ? tutoEl('search-tab') : null, tall: true,
+    text: { fr: "<b>Recherche interne à la gamme</b> : elle ne regarde que les packs de cette gamme.<br>Choisis <b>la vis</b> dans <b>Choisir un produit</b> : tu vois qu'elle est dans le sachet, et donc aussi dans le pack et le pack spécial, avec la quantité totale. Plus bas : le contenu complet d'un pack et le résumé de toutes les pièces.", en: "<b>Range search</b>: it only looks at the packs of this range.<br>Pick <b>the screw</b> in <b>Choose a product</b>: it is in the sachet, so also in the pack and the special pack, with the total quantity. Further down: the full contents of a pack and a summary of every part." } },
+  { target: () => tutoShown('packs-view') ? tutoEl('tab-btn-notes') : null,
+    advance: () => tutoShown('notes-tab'),
+    text: { fr: "Ouvre l'onglet <b>Note</b>.", en: "Open the <b>Note</b> tab." } },
+  { target: () => tutoShown('notes-tab') ? tutoEl('notes-tab') : null, tall: true,
+    text: { fr: "<b>Note de la gamme</b> : un bloc-notes libre, propre à chaque gamme. Mise en forme (gras, taille, couleur), tableaux et images. Écris par exemple les consignes de montage, puis pense à <b>Enregistrer</b>.", en: "<b>Range note</b>: a free notepad, one per range. Formatting (bold, size, colour), tables and images. Write the assembly instructions for example, then remember to <b>Save</b>." } },
+  { center: true, finish: true, text: {
+    fr: "<b>Bravo, tu as fait le tour de la Nomenclature !</b><br>Ton projet contient une base de données, et une gamme avec un sachet, un pack et un pack spécial. Le bouton <b>📄 PDF complet</b> en haut exporte le tout.<br><br>Tu peux relancer ce tutoriel quand tu veux avec <b>🎓 Tutoriel</b>.",
+    en: "<b>Well done, you have toured the Nomenclature!</b><br>Your project has a database, and a range with a sachet, a pack and a special pack. The <b>📄 Full PDF</b> button at the top exports everything.<br><br>You can replay this tutorial any time with <b>🎓 Tutorial</b>." } },
+];
+
+function tutoBuildDom(){
+  if (tutoEl('tuto-layer')) return;
+  const layer = document.createElement('div');
+  layer.id = 'tuto-layer';
+  layer.innerHTML =
+    '<div class="tuto-block" data-side="top"></div><div class="tuto-block" data-side="bottom"></div>' +
+    '<div class="tuto-block" data-side="left"></div><div class="tuto-block" data-side="right"></div>' +
+    '<div id="tuto-ring"></div>' +
+    '<div id="tuto-card" class="panel" role="dialog" aria-live="polite">' +
+      '<div id="tuto-text"></div>' +
+      '<p id="tuto-hint"></p>' +
+      '<div id="tuto-actions">' +
+        '<span id="tuto-progress"></span>' +
+        '<button type="button" class="btn" id="tuto-quit"></button>' +
+        '<button type="button" class="btn" id="tuto-prev"></button>' +
+        '<button type="button" class="btn primary" id="tuto-next"></button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(layer);
+  tutoEl('tuto-quit').addEventListener('click', tutoStop);
+  tutoEl('tuto-prev').addEventListener('click', () => tutoGoTo(tutoPrevIndex()));
+  tutoEl('tuto-next').addEventListener('click', tutoNext);
+}
+
+function tutoStart(){
+  try { localStorage.setItem(TUTO_SEEN_KEY, '1'); } catch (e){}
+  if (typeof tourState !== 'undefined' && tourState) endTour();
+  tutoBuildDom();
+  tuto = { index: 0, scrolledFor: null, textLang: null, textIndex: -1, searched: false };
+  tutoEl('tuto-layer').style.display = 'block';
+  tutoTick();
+  tutoFrame();
+}
+
+function tutoStop(){
+  tuto = null;
+  const layer = tutoEl('tuto-layer');
+  if (layer) layer.style.display = 'none';
+  tutoRefreshButton();
+}
+
+async function tutoNext(){
+  if (!tuto) return;
+  const step = TUTO_STEPS[tuto.index];
+  if (step.finish){ tutoStop(); return; }
+  if (step.ready && !step.ready()) return;
+  if (step.start && !tutoShown('home-view') && !tutoShown('list-view')){
+    if (!(await resolveUnsavedChangesBeforeLeaving())) return;
+    showHome();
+  }
+  tutoGoTo(tuto.index + 1);
+}
+
+// "Précédent" skips back over the steps that would be skipped anyway.
+function tutoPrevIndex(){
+  let i = tuto.index - 1;
+  while (i > 0 && TUTO_STEPS[i].skip && TUTO_STEPS[i].skip()) i--;
+  return Math.max(0, i);
+}
+
+function tutoGoTo(i){
+  if (!tuto) return;
+  tuto.index = Math.max(0, Math.min(TUTO_STEPS.length - 1, i));
+  tuto.scrolledFor = null;
+  tuto.textIndex = -1;
+  tutoTick();
+}
+
+function tutoTargets(step){
+  if (!step.target) return [];
+  const found = step.target();
+  return (Array.isArray(found) ? found : [found]).filter(el => el && el.getClientRects().length > 0);
+}
+
+// Another app modal (unsaved changes, confirm, ...) gets the screen to itself:
+// the tutorial hides until it closes, unless the modal is the current target.
+function tutoForeignModalOpen(targets){
+  const overlays = TUTO_MODAL_OVERLAYS.map(id => tutoEl(id)).filter(el => el && el.style.display !== 'none' && el.style.display !== '')
+    .concat(Array.from(document.querySelectorAll('.cloud-modal-overlay')));
+  return overlays.some(o => !targets.some(el => o.contains(el)));
+}
+
+// Logic pass (every 250 ms): auto-advance / step back, card text, buttons.
+function tutoTick(){
+  tutoRefreshButton();
+  if (!tuto) return;
+  ['db-search-ref', 'db-search-nom', 'db-search-categorie', 'db-search-matiere'].forEach(id => {
+    if (tutoFilled(tutoEl(id).value)) tuto.searched = true;
+  });
+  for (let guard = 0; guard < TUTO_STEPS.length; guard++){
+    const step = TUTO_STEPS[tuto.index];
+    if (step.back && step.back() && tuto.index > 0){ tuto.index--; tuto.scrolledFor = null; continue; }
+    if ((step.skip && step.skip()) || (step.advance && step.advance())){
+      if (tuto.index >= TUTO_STEPS.length - 1) break;
+      tuto.index++;
+      tuto.scrolledFor = null;
+      continue;
+    }
+    break;
+  }
+  const step = TUTO_STEPS[tuto.index];
+  if (tuto.textIndex !== tuto.index || tuto.textLang !== currentLang){
+    tuto.textIndex = tuto.index;
+    tuto.textLang = currentLang;
+    tutoEl('tuto-text').innerHTML = step.text[currentLang] || step.text.fr;
+    tutoEl('tuto-quit').textContent = t(step.start ? 'tutoLater' : 'tutoQuit');
+    tutoEl('tuto-prev').textContent = t('tourPrev');
+    tutoEl('tuto-next').textContent = t(step.start ? 'tutoStartBtn' : step.finish ? 'tourFinish' : step.advance ? 'tutoSkipStep' : 'tourNext');
+    tutoEl('tuto-progress').textContent = (step.start || step.finish) ? '' : tuto.index + ' / ' + (TUTO_STEPS.length - 2);
+    tutoEl('tuto-prev').style.display = (step.start || tuto.index <= 1) ? 'none' : '';
+    tutoEl('tuto-quit').style.display = step.finish ? 'none' : '';
+  }
+  const blocked = !!(step.ready && !step.ready());
+  tutoEl('tuto-next').disabled = blocked;
+  tutoEl('tuto-next').classList.toggle('primary', !step.advance);
+  const missing = !step.center && !tutoTargets(step).length;
+  const hint = missing ? t('tutoOffscreen') : (blocked && step.ready ? t('tutoNeedAction') : '');
+  tutoEl('tuto-hint').textContent = hint;
+  tutoEl('tuto-hint').style.display = hint ? 'block' : 'none';
+  clearTimeout(tutoTick.timer);
+  tutoTick.timer = setTimeout(tutoTick, 250);
+}
+
+// Layout pass (every frame, so the spotlight follows scrolling and re-renders).
+function tutoFrame(){
+  if (!tuto) return;
+  requestAnimationFrame(tutoFrame);
+  const step = TUTO_STEPS[tuto.index];
+  const layer = tutoEl('tuto-layer');
+  const targets = tutoTargets(step);
+  layer.style.display = tutoForeignModalOpen(targets) ? 'none' : 'block';
+  if (layer.style.display === 'none') return;
+
+  if (targets.length && tuto.scrolledFor !== targets[0]){
+    tuto.scrolledFor = targets[0];
+    const r = getUnionRect(targets);
+    if (r.top < 70 || r.bottom > window.innerHeight - 20){
+      targets[0].scrollIntoView({ block: step.tall || r.height > window.innerHeight * 0.6 ? 'start' : 'center', behavior: 'auto' });
+      if (step.tall) window.scrollBy(0, -80);
+    }
+  }
+
+  const vw = window.innerWidth, vh = window.innerHeight, pad = 6;
+  const blocks = layer.querySelectorAll('.tuto-block');
+  const ring = tutoEl('tuto-ring');
+  const card = tutoEl('tuto-card');
+  const setBox = (el, l, tp, w, h) => { el.style.left = l + 'px'; el.style.top = tp + 'px'; el.style.width = Math.max(0, w) + 'px'; el.style.height = Math.max(0, h) + 'px'; };
+  let hole = null;
+  if (targets.length){
+    const r = getUnionRect(targets);
+    const left = Math.max(0, r.left - pad), top = Math.max(0, r.top - pad);
+    const right = Math.min(vw, r.right + pad), bottom = Math.min(vh, r.bottom + pad);
+    if (right > left && bottom > top) hole = { left, top, right, bottom };
+  }
+  if (hole){
+    setBox(blocks[0], 0, 0, vw, hole.top);
+    setBox(blocks[1], 0, hole.bottom, vw, vh - hole.bottom);
+    setBox(blocks[2], 0, hole.top, hole.left, hole.bottom - hole.top);
+    setBox(blocks[3], hole.right, hole.top, vw - hole.right, hole.bottom - hole.top);
+    blocks.forEach(b => { b.style.display = 'block'; });
+    ring.style.display = 'block';
+    setBox(ring, hole.left, hole.top, hole.right - hole.left, hole.bottom - hole.top);
+  } else {
+    // centred step: the whole page is dimmed; target not on screen: nothing
+    // is dimmed so the user can get back to the right screen.
+    blocks.forEach((b, i) => { b.style.display = step.center && i === 0 ? 'block' : 'none'; });
+    if (step.center) setBox(blocks[0], 0, 0, vw, vh);
+    ring.style.display = 'none';
+  }
+
+  const cw = Math.min(400, vw - 24);
+  card.style.width = cw + 'px';
+  const ch = card.offsetHeight;
+  let cl, ct;
+  if (!hole){
+    cl = (vw - cw) / 2;
+    ct = step.center ? Math.max(12, (vh - ch) / 2) : vh - ch - 16;
+  } else {
+    cl = Math.min(Math.max(12, hole.left), vw - cw - 12);
+    if (hole.bottom + 12 + ch <= vh - 12) ct = hole.bottom + 12;
+    else if (hole.top - 12 - ch >= 12) ct = hole.top - 12 - ch;
+    else if (vw - hole.right >= cw + 24){ cl = hole.right + 12; ct = Math.min(Math.max(12, hole.top), vh - ch - 12); }
+    else if (hole.left >= cw + 24){ cl = hole.left - 12 - cw; ct = Math.min(Math.max(12, hole.top), vh - ch - 12); }
+    else { cl = vw - cw - 16; ct = vh - ch - 16; }
+  }
+  card.style.left = cl + 'px';
+  card.style.top = ct + 'px';
+}
+
+// The 🎓 button is shown on the home page and in the Nomenclature screens.
+function tutoRefreshButton(){
+  const btn = tutoEl('tuto-btn');
+  if (!btn) return;
+  const onNomenclature = ['home-view', 'list-view', 'project-view', 'packs-view'].some(tutoShown);
+  btn.style.display = (!tuto && onNomenclature) ? 'inline-block' : 'none';
+}
+
+// First visit: wait until a Nomenclature screen is on show (not the
+// workspace choice or a login prompt), then offer the tutorial once.
+function tutoAutoStart(){
+  let seen = true;
+  try { seen = localStorage.getItem(TUTO_SEEN_KEY) === '1'; } catch (e){}
+  if (seen) return;
+  const wait = () => {
+    const busy = document.querySelector('.cloud-modal-overlay') || TUTO_MODAL_OVERLAYS.some(id => tutoEl(id).style.display === 'flex');
+    if (!tuto && !busy && ['home-view', 'list-view', 'project-view', 'packs-view'].some(tutoShown)) tutoStart();
+    else if (!tuto) setTimeout(wait, 500);
+  };
+  setTimeout(wait, 600);
+}
+
+document.getElementById('tuto-btn').addEventListener('click', tutoStart);
+setInterval(() => { if (!tuto) tutoRefreshButton(); }, 500);
+
 renderRows();
 update();
 applyLanguage('fr');
 navInit();
 initCloud();
+tutoAutoStart();
 </script>
 
 </body>
