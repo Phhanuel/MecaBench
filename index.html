@@ -12143,6 +12143,10 @@ function tutoNewProjetTile(){
   return Array.from(document.querySelectorAll('#list-view .list-tile-new'))
     .find(el => el.textContent.trim() === '+' && el.getClientRects().length > 0) || null;
 }
+function tutoGroupModalOpen(){ return tutoEl('db-group-modal-overlay').style.display === 'flex'; }
+function tutoGroupModalPanel(){ return tutoEl('db-group-modal-overlay').querySelector('.panel'); }
+// sub: false = top-level groups, true = subgroups
+function tutoDbGroups(sub){ return dbGroups.filter(g => !!g.parentId === sub); }
 function tutoAddArea(){
   const a = tutoParent('pack-component-search');
   const b = tutoParent('pack-add-component-select');
@@ -12198,6 +12202,29 @@ const TUTO_NOMENCLATURE_STEPS = [
   { target: () => tutoShown('projet-db-tab') ? [tutoParent('db-search-ref'), tutoEl('db-table')] : null, above: true,
     ready: () => !!(tuto && tuto.searched),
     text: { fr: "Voici l'<b>outil de recherche</b> : chaque champ filtre une colonne. Tape <b>VIS</b> dans <b>Référence</b> pour ne garder que la vis, puis vide le champ pour retrouver toute la base.", en: "This is the <b>search tool</b>: each field filters one column. Type <b>VIS</b> in <b>Reference</b> to keep only the screw, then clear the field to see the whole database again." } },
+  { target: () => tutoShown('projet-db-tab') ? tutoEl('db-add-group-btn') : null,
+    advance: () => tutoGroupModalOpen() || tutoDbGroups(false).length > 0,
+    text: { fr: "Range la base en <b>groupes</b> : clique sur <b>+ Nouveau groupe</b>.", en: "Sort the database into <b>groups</b>: click <b>+ New group</b>." } },
+  { target: () => tutoGroupModalOpen() ? tutoGroupModalPanel() : null,
+    advance: () => tutoDbGroups(false).length > 0,
+    back: () => !tutoGroupModalOpen() && !tutoDbGroups(false).length,
+    text: { fr: "Nomme le groupe <b>Fixation</b>, puis clique sur <b>Enregistrer</b>.", en: "Name the group <b>Mounting</b>, then click <b>Save</b>." } },
+  { target: () => tutoShown('projet-db-tab') ? tutoEl('db-table') : null, above: true,
+    advance: () => db.filter(d => d.groupId && dbGroups.some(g => g.id === d.groupId)).length >= 2,
+    text: { fr: "Mets <b>les deux pièces</b> dans le groupe : choisis-les dans la liste <b>Ajouter un produit à ce groupe...</b> sous son titre, ou glisse une ligne par sa poignée <b>≡</b> sur le groupe. Le bouton <b>↩</b> d'une ligne la sort du groupe.", en: "Put <b>both parts</b> in the group: pick them in the <b>Add a product to this group...</b> list under its title, or drag a row by its <b>≡</b> handle onto the group. A row's <b>↩</b> button takes it out of the group." } },
+  { target: () => tutoShown('projet-db-tab') ? document.querySelector('#db-body tr.db-group-header-row:not(.db-subgroup-header-row) td.del-col') : null,
+    advance: () => tutoGroupModalOpen() || tutoDbGroups(true).length > 0,
+    text: { fr: "Crée un <b>sous-groupe</b> : clique sur <b>⊕</b> dans la ligne du groupe. À côté, <b>✎</b> renomme le groupe et <b>✕</b> le supprime (ses pièces redeviennent non groupées, ses sous-groupes remontent d'un niveau).", en: "Create a <b>subgroup</b>: click <b>⊕</b> on the group's row. Next to it, <b>✎</b> renames the group and <b>✕</b> deletes it (its parts become ungrouped, its subgroups move up one level)." } },
+  { target: () => tutoGroupModalOpen() ? tutoGroupModalPanel() : null,
+    advance: () => tutoDbGroups(true).length > 0,
+    back: () => !tutoGroupModalOpen() && !tutoDbGroups(true).length,
+    text: { fr: "Nomme le sous-groupe <b>Visserie</b>, puis clique sur <b>Enregistrer</b>.", en: "Name the subgroup <b>Fasteners</b>, then click <b>Save</b>." } },
+  { target: () => tutoShown('projet-db-tab') ? tutoEl('db-table') : null, above: true,
+    advance: () => db.some(d => tutoDbGroups(true).some(g => g.id === d.groupId)),
+    text: { fr: "Range <b>la vis</b> dans le sous-groupe : choisis-la dans la liste sous <b>Visserie</b> (elle propose les pièces du groupe parent), ou glisse-la dessus.", en: "Move <b>the screw</b> into the subgroup: pick it in the list under <b>Fasteners</b> (it offers the parent group's parts), or drag it there." } },
+  { target: () => tutoShown('projet-db-tab') ? tutoEl('db-table') : null, above: true, dupStep: true,
+    ready: () => !!(tuto && tuto.duplicated && db.length <= tuto.dbBase),
+    text: { fr: "Au bout de chaque ligne, <b>⧉</b> duplique la pièce (pratique pour une variante : même pièce en M8, autre longueur...) et <b>✕</b> la supprime. Essaie : <b>duplique la vis</b>, puis <b>supprime la copie</b>.", en: "At the end of each row, <b>⧉</b> duplicates the part (handy for a variant: same part in M8, another length...) and <b>✕</b> deletes it. Try it: <b>duplicate the screw</b>, then <b>delete the copy</b>." } },
   { target: () => tutoShown('project-view') ? tutoEl('save-projet-btn') : null,
     advance: () => tutoShown('project-view') && !hasUnsavedProjetChanges(),
     text: { fr: "Clique sur <b>Enregistrer</b> pour sauvegarder le projet et sa base de données.", en: "Click <b>Save</b> to store the project and its database." } },
@@ -12370,6 +12397,11 @@ function tutoTick(){
   ['db-search-ref', 'db-search-nom', 'db-search-categorie', 'db-search-matiere'].forEach(id => {
     if (tutoFilled(tutoEl(id).value)) tuto.searched = true;
   });
+  // duplicate / delete step: remember the database size when it starts
+  if (tuto.steps[tuto.index].dupStep){
+    if (tuto.dbBase == null) tuto.dbBase = db.length;
+    if (db.length > tuto.dbBase) tuto.duplicated = true;
+  }
   for (let guard = 0; guard < tuto.steps.length; guard++){
     const step = tuto.steps[tuto.index];
     if (step.back && step.back() && tuto.index > 0){ tuto.index--; tuto.scrolledFor = null; continue; }
