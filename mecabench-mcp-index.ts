@@ -14,7 +14,7 @@
 // (Fichier volontairement en JavaScript pur : il est aussi testé sous Node.)
 // =============================================================================
 
-const SERVER_INFO = { name: 'mecabench', version: '1.2.0' };
+const SERVER_INFO = { name: 'mecabench', version: '1.3.0' };
 const SUPPORTED_PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const MAX_OUTPUT_CHARS = 150000;
 const MAX_FIELD = 500;
@@ -67,7 +67,7 @@ const TOOLS = [
   {
     name: 'add_parts',
     description:
-      "Ajoute des pièces à la base de données du projet. Champs : reference, nom, prix (nombre, en €), matiere, categorie, pm (prix matière), va (valeur ajoutée), group (nom de groupe, ou chemin de sous-groupes « Parent > Enfant », créé si besoin). " +
+      "Ajoute des pièces à la base de données du projet. Champs : reference, nom, prix (nombre, en €), matiere, categorie, pm (prix matière), va (valeur ajoutée), group (nom de groupe, ou chemin de sous-groupes « Parent > Enfant », créé si besoin), temp (case « Temp. »). " +
       "Par défaut, une pièce dont la référence existe déjà est ignorée (on_duplicate_reference='add' pour l'ajouter quand même).",
     inputSchema: {
       type: 'object',
@@ -81,7 +81,7 @@ const TOOLS = [
             properties: {
               reference: { type: 'string' }, nom: { type: 'string' }, prix: { type: ['number', 'string'] },
               matiere: { type: 'string' }, categorie: { type: 'string' }, pm: { type: ['number', 'string'] }, va: { type: ['number', 'string'] },
-              group: { type: 'string' },
+              group: { type: 'string' }, temp: { type: 'boolean' },
             },
             additionalProperties: false,
           },
@@ -94,7 +94,7 @@ const TOOLS = [
   },
   {
     name: 'update_part',
-    description: "Modifie une pièce existante (par part_id). Champs modifiables : reference, nom, prix, matiere, categorie, pm, va, group (nom ou chemin « Parent > Enfant », créé si besoin ; '' pour retirer du groupe). Les produits qui utilisent la pièce sont mis à jour.",
+    description: "Modifie une pièce existante (par part_id). Champs modifiables : reference, nom, prix, matiere, categorie, pm, va, group (nom ou chemin « Parent > Enfant », créé si besoin ; '' pour retirer du groupe), temp (case « Temp. » : prix provisoire). Changer prix sans temp décoche Temp. Les produits qui utilisent la pièce sont mis à jour. Pour plusieurs pièces, utiliser update_parts.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -104,12 +104,44 @@ const TOOLS = [
           properties: {
             reference: { type: 'string' }, nom: { type: 'string' }, prix: { type: ['number', 'string'] },
             matiere: { type: 'string' }, categorie: { type: 'string' }, pm: { type: ['number', 'string'] }, va: { type: ['number', 'string'] },
-            group: { type: 'string' },
+            group: { type: 'string' }, temp: { type: 'boolean', description: 'Case « Temp. » (prix provisoire)' },
           },
           additionalProperties: false,
         },
       },
       required: ['project_id', 'part_id', 'fields'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'update_parts',
+    description: "Modifie plusieurs pièces en un seul enregistrement. 'updates' = liste de { part_id, fields } avec les mêmes champs que update_part. Tout ou rien : si une pièce est introuvable, rien n'est modifié.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_id: { type: 'string' },
+        updates: {
+          type: 'array', maxItems: 500,
+          items: {
+            type: 'object',
+            properties: {
+              part_id: { type: 'string' },
+              fields: {
+                type: 'object',
+                properties: {
+                  reference: { type: 'string' }, nom: { type: 'string' }, prix: { type: ['number', 'string'] },
+                  matiere: { type: 'string' }, categorie: { type: 'string' }, pm: { type: ['number', 'string'] }, va: { type: ['number', 'string'] },
+                  group: { type: 'string' }, temp: { type: 'boolean' },
+                },
+                additionalProperties: false,
+              },
+            },
+            required: ['part_id', 'fields'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['project_id', 'updates'],
       additionalProperties: false,
     },
   },
@@ -161,7 +193,7 @@ const TOOLS = [
   },
 ];
 
-const WRITE_TOOLS = new Set(['create_project', 'rename_project', 'add_parts', 'update_part', 'delete_parts', 'save_produit']);
+const WRITE_TOOLS = new Set(['create_project', 'rename_project', 'add_parts', 'update_part', 'update_parts', 'delete_parts', 'save_produit']);
 
 // -----------------------------------------------------------------------------
 // Erreurs
@@ -287,6 +319,7 @@ function addParts(data, parts, onDuplicate) {
     }
     const part = { id: String(next++), nom, reference, prix: numStr(raw.prix), categorie: str(raw.categorie), matiere: str(raw.matiere), pm: numStr(raw.pm), va: numStr(raw.va) };
     if (str(raw.group)) part.groupId = ensureGroup(data, raw.group).id;
+    if (raw.temp !== undefined) part.tempPrice = !!raw.temp;
     data.db.push(part);
     byRef.set(reference.toLowerCase(), part);
     added.push({ part_id: part.id, reference, nom });
@@ -300,7 +333,8 @@ function updatePart(data, partId, fields) {
   const f = fields || {};
   for (const k of ['reference', 'nom', 'matiere', 'categorie']) if (k in f) p[k] = str(f[k]);
   for (const k of ['prix', 'pm', 'va']) if (k in f) p[k] = numStr(f[k]);
-  if ('prix' in f) p.tempPrice = null;
+  if ('temp' in f) p.tempPrice = !!f.temp;
+  else if ('prix' in f) p.tempPrice = null;
   if ('group' in f) {
     if (str(f.group)) p.groupId = ensureGroup(data, f.group).id; else delete p.groupId;
   }
@@ -308,6 +342,15 @@ function updatePart(data, partId, fields) {
   let synced = 0;
   for (const pr of data.produits) for (const r of pr.rows || []) if (r.dbId === p.id) { r.nom = p.nom; r.reference = p.reference; synced++; }
   return { part_id: p.id, reference: p.reference, nom: p.nom, produit_rows_synced: synced };
+}
+
+function updateParts(data, updates) {
+  if (!Array.isArray(updates) || !updates.length) throw new ToolError('updates est obligatoire (liste non vide).');
+  if (updates.length > 500) throw new ToolError('500 modifications maximum par appel.');
+  const missing = updates.filter((u) => !data.db.some((x) => String(x.id) === String(u && u.part_id))).map((u) => u && u.part_id);
+  if (missing.length) throw new ToolError(`Pièce(s) introuvable(s) : ${missing.join(', ')}. Rien n'a été modifié.`);
+  const updated = updates.map((u) => updatePart(data, u.part_id, u.fields));
+  return { updated: updated.length, parts: updated.map((u) => ({ part_id: u.part_id, nom: u.nom })) };
 }
 
 function deleteParts(data, ids) {
@@ -501,7 +544,7 @@ function describeProject(g, include) {
   };
   if (inc.has('raw')) { out.data = data; return out; }
   if (inc.has('groups')) out.groups = data.dbGroups.map((x) => ({ id: x.id, name: x.name, parentId: x.parentId || null }));
-  if (inc.has('parts')) out.parts = data.db.map((p) => ({ part_id: p.id, reference: p.reference, nom: p.nom, prix: p.prix, matiere: p.matiere || '', categorie: p.categorie || '', group: p.groupId || null }));
+  if (inc.has('parts')) out.parts = data.db.map((p) => ({ part_id: p.id, reference: p.reference, nom: p.nom, prix: p.prix, matiere: p.matiere || '', categorie: p.categorie || '', group: p.groupId || null, temp: !!p.tempPrice }));
   if (inc.has('bruts')) out.bruts = data.bruts.map((b) => ({ id: b.id, reference: b.reference, nom: b.nom, prix: b.prix }));
   if (inc.has('produits')) out.produits = data.produits.map((p) => ({ produit_id: p.id, title: p.title, notes: p.notes || '', rows: (p.rows || []).length, tree: rowsToTree(p.rows) }));
   return out;
@@ -565,6 +608,8 @@ async function callTool(rpc, token, name, args) {
     }
     case 'update_part':
       return await mutateProject(rpc, token, needUuid(args.project_id, 'project_id'), (data) => updatePart(data, args.part_id, args.fields));
+    case 'update_parts':
+      return await mutateProject(rpc, token, needUuid(args.project_id, 'project_id'), (data) => updateParts(data, args.updates));
     case 'delete_parts': {
       if (!Array.isArray(args.part_ids) || !args.part_ids.length) throw new ToolError('part_ids est obligatoire.');
       return await mutateProject(rpc, token, needUuid(args.project_id, 'project_id'), (data) => deleteParts(data, args.part_ids));
@@ -662,4 +707,4 @@ if (typeof Deno !== 'undefined' && Deno.serve) {
   Deno.serve((req) => handleRequest(req, { SUPABASE_URL: Deno.env.get('SUPABASE_URL'), SERVICE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') }));
 }
 
-export { handleRequest, handleRpcMessage, callTool, addParts, updatePart, deleteParts, saveProduit, treeToRows, rowsToTree, mutateProject, TOOLS, WRITE_TOOLS };
+export { handleRequest, handleRpcMessage, callTool, addParts, updatePart, updateParts, deleteParts, saveProduit, treeToRows, rowsToTree, mutateProject, TOOLS, WRITE_TOOLS };
