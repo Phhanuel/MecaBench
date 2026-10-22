@@ -1758,6 +1758,7 @@
   <div class="panel" style="max-width:440px; width:90%; max-height:80vh; overflow:auto; box-shadow:0 12px 32px rgba(0,0,0,0.35);">
     <h2 style="margin-top:0;" data-i18n="fullPdfModalTitle">Télécharger le PDF complet</h2>
     <p class="note" style="margin-top:0;" data-i18n="fullPdfModalNote">Décoche ce que tu veux exclure du document.</p>
+    <button class="btn" id="full-pdf-toggle-all" type="button" data-i18n="fullPdfUncheckAll">Tout décocher</button>
     <label style="display:flex; align-items:center; gap:8px; margin:10px 0; cursor:pointer;">
       <input type="checkbox" id="full-pdf-include-search" checked style="width:auto;">
       <span data-i18n="tabSearch">Recherche</span>
@@ -2049,8 +2050,6 @@ const translations = {
     savedConfirm: 'Enregistré ✓',
     newNomenclatureBtn: 'Nouvelle nomenclature',
     untitledProject: 'Sans titre',
-    blocksSingular: 'bloc',
-    blocksPlural: 'blocs',
     confirmDeleteProject: 'Supprimer cette nomenclature enregistrée ? Cette action est irréversible.',
     confirmDeletePack: 'Supprimer ce pack et tous ses composants ? Cette action est irréversible.',
     storageUnavailable: 'Impossible d\'enregistrer — le stockage local du navigateur est indisponible ou plein.',
@@ -2297,6 +2296,8 @@ const translations = {
     fullPdfModalTitle: 'Télécharger le PDF complet',
     fullPdfModalNote: 'Décoche ce que tu veux exclure du document.',
     fullPdfModalPacksLabel: 'Packs à inclure',
+    fullPdfCheckAll: 'Tout cocher',
+    fullPdfUncheckAll: 'Tout décocher',
     fullPdfModalDownload: 'Télécharger',
     fullPdfGenerating: 'Génération...',
     fullPdfDbSectionTitle: 'Base de données',
@@ -2535,8 +2536,6 @@ const translations = {
     savedConfirm: 'Saved ✓',
     newNomenclatureBtn: 'New parts list',
     untitledProject: 'Untitled',
-    blocksSingular: 'block',
-    blocksPlural: 'blocks',
     confirmDeleteProject: 'Delete this saved parts list? This action cannot be undone.',
     confirmDeletePack: 'Delete this pack and all its components? This action cannot be undone.',
     storageUnavailable: 'Could not save — the browser\'s local storage is unavailable or full.',
@@ -2783,6 +2782,8 @@ const translations = {
     fullPdfModalTitle: 'Download the full PDF',
     fullPdfModalNote: 'Uncheck anything you want to leave out of the document.',
     fullPdfModalPacksLabel: 'Packs to include',
+    fullPdfCheckAll: 'Check all',
+    fullPdfUncheckAll: 'Uncheck all',
     fullPdfModalDownload: 'Download',
     fullPdfGenerating: 'Generating...',
     fullPdfDbSectionTitle: 'Database',
@@ -5446,7 +5447,21 @@ function openFullPdfModal(){
     checklist.appendChild(label);
   });
   document.getElementById('full-pdf-modal-error').textContent = '';
+  updateFullPdfToggleAllBtn();
   document.getElementById('full-pdf-modal-overlay').style.display = 'flex';
+}
+
+function fullPdfModalCheckboxes(){
+  return Array.from(document.querySelectorAll('#full-pdf-modal-overlay input[type="checkbox"]'));
+}
+
+// The toggle reads "Uncheck all" while everything is checked, "Check all" otherwise.
+function updateFullPdfToggleAllBtn(){
+  const allChecked = fullPdfModalCheckboxes().every(cb => cb.checked);
+  const btn = document.getElementById('full-pdf-toggle-all');
+  const key = allChecked ? 'fullPdfUncheckAll' : 'fullPdfCheckAll';
+  btn.dataset.i18n = key;
+  btn.textContent = t(key);
 }
 
 // Fits a natural width/height box within a max box, preserving aspect ratio.
@@ -7880,11 +7895,6 @@ function renderProduitTiles(){
     titleEl.className = 'list-tile-title';
     titleEl.textContent = (produit.title && produit.title.trim() !== '') ? produit.title : t('untitledProduit');
 
-    const n = (produit.rows || []).length;
-    const countEl = document.createElement('div');
-    countEl.className = 'list-tile-count';
-    countEl.textContent = n + ' ' + (n > 1 ? t('blocksPlural') : t('blocksSingular'));
-
     const metaEl = document.createElement('div');
     metaEl.className = 'list-tile-meta';
     if (produit.updatedAt){
@@ -7893,7 +7903,6 @@ function renderProduitTiles(){
 
     tile.appendChild(delBtn);
     tile.appendChild(titleEl);
-    tile.appendChild(countEl);
     tile.appendChild(metaEl);
     tile.addEventListener('click', () => openProduit(produit.id));
     tile.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openProduit(produit.id); } });
@@ -11677,6 +11686,15 @@ document.getElementById('notes-table-modal-cancel').addEventListener('click', ()
 });
 
 document.getElementById('download-full-pdf-btn').addEventListener('click', openFullPdfModal);
+document.getElementById('full-pdf-toggle-all').addEventListener('click', () => {
+  const cbs = fullPdfModalCheckboxes();
+  const check = !cbs.every(cb => cb.checked);
+  cbs.forEach(cb => { cb.checked = check; });
+  updateFullPdfToggleAllBtn();
+});
+document.getElementById('full-pdf-modal-overlay').addEventListener('change', e => {
+  if (e.target.matches('input[type="checkbox"]')) updateFullPdfToggleAllBtn();
+});
 document.getElementById('full-pdf-modal-cancel').addEventListener('click', () => {
   document.getElementById('full-pdf-modal-overlay').style.display = 'none';
 });
