@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>MecaBench</title>
+<script>
+  // MecaBench is a single page (index.html) with one address per screen
+  // (/nomenclature/, /nomenclature/<projet>/…). GitHub Pages has no file for
+  // those addresses and serves this page instead: send the visitor to the app
+  // with the address in ?p=, which index.html puts back right away.
+  location.replace('/?p=' + encodeURIComponent(location.pathname)
+    + (location.search ? '&' + location.search.slice(1) : '') + location.hash);
+</script>
+</head>
+<body>
+<p><a href="/">MecaBench</a></p>
+</body>
+</html>
