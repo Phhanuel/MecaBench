@@ -12341,12 +12341,13 @@ function tutoTargets(step){
   return (Array.isArray(found) ? found : [found]).filter(el => el && el.getClientRects().length > 0);
 }
 
-// Another app modal (unsaved changes, confirm, ...) gets the screen to itself:
-// the tutorial hides until it closes, unless the modal is the current target.
-function tutoForeignModalOpen(targets){
+// Another app modal (login, unsaved changes, confirm, ...) that is not the
+// current target: returns its overlay, so the tutorial stops dimming and
+// keeps only its card, beside the modal.
+function tutoForeignModal(targets){
   const overlays = TUTO_MODAL_OVERLAYS.map(id => tutoEl(id)).filter(el => el && el.style.display !== 'none' && el.style.display !== '')
     .concat(Array.from(document.querySelectorAll('.cloud-modal-overlay')));
-  return overlays.some(o => !targets.some(el => o.contains(el)));
+  return overlays.find(o => !targets.some(el => o.contains(el))) || null;
 }
 
 // Logic pass (every 250 ms): auto-advance / step back, card text, buttons.
@@ -12397,8 +12398,12 @@ function tutoFrame(){
   const step = tuto.steps[tuto.index];
   const layer = tutoEl('tuto-layer');
   const targets = tutoTargets(step);
-  layer.style.display = tutoForeignModalOpen(targets) ? 'none' : 'block';
-  if (layer.style.display === 'none') return;
+  const modal = tutoForeignModal(targets);
+  layer.style.display = 'block';
+  if (modal){
+    tutoCardBesideModal(layer, modal);
+    return;
+  }
 
   if (targets.length && tuto.scrolledFor !== targets[0]){
     tuto.scrolledFor = targets[0];
@@ -12454,6 +12459,27 @@ function tutoFrame(){
     else if (hole.left >= cw + 24){ cl = hole.left - 12 - cw; ct = Math.min(Math.max(12, hole.top), vh - ch - 12); }
     else { cl = vw - cw - 16; ct = vh - ch - 16; }
   }
+  card.style.left = cl + 'px';
+  card.style.top = ct + 'px';
+}
+
+function tutoCardBesideModal(layer, modal){
+  layer.querySelectorAll('.tuto-block').forEach(b => { b.style.display = 'none'; });
+  tutoEl('tuto-ring').style.display = 'none';
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const card = tutoEl('tuto-card');
+  const cw = Math.min(400, vw - 24);
+  card.style.width = cw + 'px';
+  const ch = card.offsetHeight;
+  const panel = modal.querySelector('.panel') || modal;
+  const r = panel.getBoundingClientRect();
+  const top = Math.min(Math.max(12, r.top), vh - ch - 12);
+  let cl, ct;
+  if (vw - r.right >= cw + 24){ cl = r.right + 12; ct = top; }
+  else if (r.left >= cw + 24){ cl = r.left - 12 - cw; ct = top; }
+  else if (vh - r.bottom >= ch + 24){ cl = (vw - cw) / 2; ct = r.bottom + 12; }
+  else if (r.top >= ch + 24){ cl = (vw - cw) / 2; ct = r.top - 12 - ch; }
+  else { cl = 12; ct = vh - ch - 12; }
   card.style.left = cl + 'px';
   card.style.top = ct + 'px';
 }
