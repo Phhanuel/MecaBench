@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Only pages GitHub Pages serves with HTTP 200. The tool screens
+     (/nomenclature/, /bete-a-cornes/, /pieuvre/) have no file of their own:
+     404.html answers them with a 404 status, so search engines would reject
+     them here. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://mecabench.com/</loc>
+    <lastmod>2026-10-27</lastmod>
+  </url>
+  <url>
+    <loc>https://mecabench.com/confidentialite.html</loc>
+    <lastmod>2026-10-27</lastmod>
+  </url>
+</urlset>
