@@ -1,9 +1,10 @@
 # MecaBench : https://mecabench.com
 #
 # Pages publiques : l'accueil, la page de confidentialité et l'entrée de
-# chaque outil (/nomenclature/, /bete-a-cornes/, /pieuvre/).
+# chaque outil (/nomenclature/, /bete-a-cornes/, /pieuvre/, /cycle-de-vie/).
 # Pas d'indexation des projets et schémas des utilisateurs
-# (/nomenclature/<projet>/…, /bete-a-cornes/<id>/, /pieuvre/<id>/),
+# (/nomenclature/<projet>/…, /bete-a-cornes/<id>/, /pieuvre/<id>/,
+# /cycle-de-vie/<id>/),
 # de l'espace personnel (/espace/) ni des adresses /?p=… que 404.html
 # fabrique en redirigeant les adresses profondes vers l'appli, ni des
 # liens d'invitation /?join=….
@@ -14,9 +15,11 @@ Allow: /confidentialite.html
 Allow: /nomenclature/$
 Allow: /bete-a-cornes/$
 Allow: /pieuvre/$
+Allow: /cycle-de-vie/$
 Disallow: /nomenclature/*/
 Disallow: /bete-a-cornes/*/
 Disallow: /pieuvre/*/
+Disallow: /cycle-de-vie/*/
 Disallow: /espace/
 Disallow: /*?p=
 Disallow: /*?join=
