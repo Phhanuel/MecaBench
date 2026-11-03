@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Only pages GitHub Pages serves with HTTP 200. The tool screens
-     (/nomenclature/, /bete-a-cornes/, /pieuvre/) have no file of their own:
+     (/nomenclature/, /bete-a-cornes/, /pieuvre/, /cycle-de-vie/) have no file
+     of their own:
      404.html answers them with a 404 status, so search engines would reject
      them here. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
