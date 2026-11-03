@@ -11494,6 +11494,7 @@ function buildCycleVieSvg(data, scale, useForeignObject, includeBackground){
     const pts = [];
     const a0 = ang(i), a1 = ang(i + 1);
     for (let k = 0; k <= 80; k++) pts.push(on(a0 + (a1 - a0) * k / 80, Rx, Ry));
+    pts.forEach(q => grow(q.x - 8, q.y - 8, q.x + 8, q.y + 8));
     svg += cvArrowPath(pts, gapBox(boxes[i], 5), gapBox(boxes[i + 1], 5), '#5b6670', 2.6);
   }
 
@@ -11522,9 +11523,11 @@ function buildCycleVieSvg(data, scale, useForeignObject, includeBackground){
     svg += pvBoxText(lx + 8, ly, lw - 16, lh, label, 13, useForeignObject, true).replace(/color:#1c1c1c/, 'color:' + CV_LOOP_COLOR).replace(/fill="#1c1c1c"/, `fill="${CV_LOOP_COLOR}"`);
   }
 
-  // 3) product in the middle
-  svg += `<ellipse cx="${cx}" cy="${cy}" rx="${PROD_RX}" ry="${PROD_RY}" fill="#DCEBFB" stroke="#2E6DA4" stroke-width="2.5" />`;
-  svg += pvBoxText(cx - 74, cy - 34, 148, 68, data.product || '', 14, useForeignObject, true);
+  // 3) product in the middle (left out while it has no name)
+  if ((data.product || '').trim()){
+    svg += `<ellipse cx="${cx}" cy="${cy}" rx="${PROD_RX}" ry="${PROD_RY}" fill="#DCEBFB" stroke="#2E6DA4" stroke-width="2.5" />`;
+    svg += pvBoxText(cx - 74, cy - 34, 148, 68, data.product, cvFitFont(data.product, 148, 68, 14), useForeignObject, true);
+  }
 
   // 4) stage boxes: number badge, name, details
   stages.forEach((s, i) => {
@@ -11542,6 +11545,9 @@ function buildCycleVieSvg(data, scale, useForeignObject, includeBackground){
     svg += `<text x="${b.x + 2}" y="${b.y + 2}" font-size="11" font-weight="bold" font-family="Arial, sans-serif" fill="#ffffff" text-anchor="middle" dominant-baseline="central">${i + 1}</text>`;
   });
 
+  // centred on the product left to right, so the diagram is not lopsided
+  const half = Math.max(cx - x0, x1 - cx);
+  x0 = cx - half; x1 = cx + half;
   const M = 18;
   x0 = Math.floor(x0 - M); y0 = Math.floor(y0 - M); x1 = Math.ceil(x1 + M); y1 = Math.ceil(y1 + M);
   const vw = x1 - x0, vh = y1 - y0;
