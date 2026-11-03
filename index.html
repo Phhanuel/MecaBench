@@ -11523,9 +11523,11 @@ function buildCycleVieSvg(data, scale, useForeignObject, includeBackground){
     svg += pvBoxText(lx + 8, ly, lw - 16, lh, label, 13, useForeignObject, true).replace(/color:#1c1c1c/, 'color:' + CV_LOOP_COLOR).replace(/fill="#1c1c1c"/, `fill="${CV_LOOP_COLOR}"`);
   }
 
-  // 3) product in the middle
-  svg += `<ellipse cx="${cx}" cy="${cy}" rx="${PROD_RX}" ry="${PROD_RY}" fill="#DCEBFB" stroke="#2E6DA4" stroke-width="2.5" />`;
-  svg += pvBoxText(cx - 74, cy - 34, 148, 68, data.product || '', 14, useForeignObject, true);
+  // 3) product in the middle (left out while it has no name)
+  if ((data.product || '').trim()){
+    svg += `<ellipse cx="${cx}" cy="${cy}" rx="${PROD_RX}" ry="${PROD_RY}" fill="#DCEBFB" stroke="#2E6DA4" stroke-width="2.5" />`;
+    svg += pvBoxText(cx - 74, cy - 34, 148, 68, data.product, cvFitFont(data.product, 148, 68, 14), useForeignObject, true);
+  }
 
   // 4) stage boxes: number badge, name, details
   stages.forEach((s, i) => {
